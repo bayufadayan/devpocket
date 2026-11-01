@@ -1,0 +1,48 @@
+export type NoteStatus = 'draft' | 'collection'
+export type NoteUsage = 'try' | 'active' | 'reference'
+export type CollectionTab = 'all' | NoteUsage | 'draft'
+export type CollectionLayout = 'standard' | 'compare'
+export type CollectionView = 'folders' | 'items'
+
+export interface Folder {
+  id: string
+  name: string
+  item_count: number
+  created_at: string
+}
+
+export interface Note {
+  id: string
+  title: string
+  content: string
+  source_url: string | null
+  platform: string
+  folder_id: string | null
+  folder_name: string | null
+  status: NoteStatus
+  usage: NoteUsage | null
+  icon_name: string | null
+  icon_asset_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface IconAsset {
+  id: string
+  name: string
+  content_type: string
+  byte_size: number
+  used_count: number
+  url: string
+}
+
+export interface NoteInput {
+  title: string
+  content: string
+  sourceUrl: string
+  destination: NoteStatus
+  folderId: string
+  usage: NoteUsage | ''
+  iconName: string
+  iconAssetId: string
+}

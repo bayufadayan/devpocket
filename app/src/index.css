@@ -1,0 +1,35 @@
+@font-face {
+  font-family: Manrope;
+  src: url('/fonts/Manrope.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+:root {
+  font-family: Manrope, system-ui, sans-serif;
+  color: #151412;
+  background: #f5f4f0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  --canvas: #f5f4f0;
+  --surface: #f5f4f0;
+  --inset: #eceae3;
+  --text: #151412;
+  --muted: #57534b;
+  --accent: #2750d6;
+  --border: #cfcdc7;
+  --shadow-up: 3px 3px 8px #d8d6d0, -3px -3px 8px #fff;
+  --shadow-down: inset 2px 2px 5px #d7d5cf, inset -2px -2px 5px #fff;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #2750d6; outline-offset: 2px; }
+::selection { color: #102975; background: #cad5ff; }

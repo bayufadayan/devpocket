@@ -1,0 +1,39 @@
+{
+  "name": "devpocket",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && tsc -p tsconfig.worker.json --noEmit && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "db:migrate:local": "wrangler d1 migrations apply devpocket-local --local",
+    "db:migrate:remote": "wrangler d1 migrations apply devpocket --remote --env production",
+    "deploy": "node scripts/deploy.mjs",
+    "cf:typegen": "wrangler types --env-interface Env"
+  },
+  "dependencies": {
+    "hono": "^4.13.14",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.66.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4",
+    "wrangler": "^4.156.0"
+  }
+}

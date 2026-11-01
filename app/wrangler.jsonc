@@ -1,0 +1,47 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "devpocket",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-30",
+  "preview_urls": false,
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "devpocket-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ICONS",
+      "bucket_name": "devpocket-icons-local"
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "devpocket",
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "devpocket",
+          "database_id": "dcb3d5b0-5149-435a-a83b-43a3add1fca8",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ICONS",
+          "bucket_name": "devpocket-icons"
+        }
+      ]
+    }
+  },
+  "observability": {
+    "enabled": true
+  }
+}

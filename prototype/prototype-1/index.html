@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>DevPocket · Prototype</title>
+  <style>
+    :root {
+      --bg: #f5f4f0; --inset: #eceae3; --ink: #151412; --muted: #57534b;
+      --accent: #2750d6; --accent-hover: #1e3faa; --accent-soft: #e7ecfc;
+      --line: #d8d5cc; --edge: #868175; --danger: #a02d2d;
+      --raised: 8px 8px 22px #dedcd4, -8px -8px 22px #ffffff;
+      --small: 3px 3px 8px #dedcd4, -3px -3px 8px #ffffff;
+      --sunken: inset 3px 3px 7px #dcd9d1, inset -3px -3px 7px #ffffff;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink); background: var(--bg); font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-size: 14px; line-height: 1.5; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button, a[href], select, summary, label[for], input[type=checkbox] { cursor: pointer; }
+    button:disabled, select:disabled { cursor: not-allowed; opacity: .6; }
+    button { border: 0; background: transparent; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+    input:focus-visible, textarea:focus-visible, select:focus-visible { outline-offset: 2px; }
+    button:not(:disabled):active { box-shadow: var(--sunken); }
+    button:not(:disabled):hover { background-color: var(--inset); }
+    .icon { width: 19px; height: 19px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.65; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+    [hidden] { display: none !important; }
+    .skip { position: fixed; top: 8px; left: 8px; transform: translateY(-160%); padding: 12px; background: white; z-index: 50; }
+    .skip:focus { transform: none; }
+    .shell { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: 100dvh; }
+    .sidebar { position: sticky; top: 0; height: 100dvh; overflow-y: auto; padding: 36px 22px 22px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 34px; }
+    .brand { font-size: 23px; letter-spacing: -.9px; font-weight: 720; padding: 0 12px; }
+    .nav { display: grid; gap: 8px; }
+    .nav-button { min-height: 46px; display: flex; gap: 11px; align-items: center; text-align: left; width: 100%; border-radius: 10px; padding: 10px 12px; color: var(--muted); }
+    .nav-button[aria-current=page] { background: var(--bg); box-shadow: var(--sunken); color: var(--accent); font-weight: 650; }
+    .count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .section-line { display: flex; align-items: center; justify-content: space-between; padding-left: 12px; }
+    .section-line h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; }
+    .icon-button { display: inline-flex; justify-content: center; align-items: center; min-width: 44px; min-height: 44px; border-radius: 9px; flex-shrink: 0; }
+    .categories .nav-button { font-size: 13px; min-height: 44px; gap: 10px; }
+    .categories .icon { width: 16px; height: 16px; }
+    .sidebar-footer { margin-top: auto; padding: 20px 12px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .sidebar-footer p { margin: 0 0 8px; }
+    .text-button { min-height: 44px; padding: 8px 0; color: var(--muted); text-align: left; text-decoration: underline; text-underline-offset: 4px; border-radius: 4px; }
+    .workspace { min-width: 0; padding: 40px 38px 28px; max-width: 1680px; width: 100%; margin: 0 auto; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 28px; }
+    .page-heading { display: flex; align-items: baseline; gap: 13px; min-width: 0; }
+    h1 { font-size: clamp(24px, 2.5vw, 30px); font-weight: 650; letter-spacing: -1px; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+    #total-label { color: var(--muted); font-size: 13px; white-space: nowrap; }
+    .button { display: inline-flex; justify-content: center; align-items: center; gap: 9px; min-height: 44px; padding: 11px 17px; border-radius: 9px; font-weight: 580; font-size: 13px; text-decoration: none; background: var(--bg); box-shadow: var(--small); border: 1px solid var(--edge); }
+    .button.primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 3px 4px 10px #2750d62b; }
+    .button.primary:hover { background: var(--accent-hover); }
+    .button.primary:active { background: var(--accent-hover); box-shadow: inset 2px 2px 5px #152e7d; }
+    .button.quiet { box-shadow: none; background: transparent; }
+    .button.danger { color: var(--danger); }
+    .search-row { display: flex; align-items: end; gap: 12px; margin-bottom: 20px; }
+    .search-field { flex: 1; min-width: 0; }
+    .field-label { display: block; font-size: 12px; font-weight: 580; color: var(--muted); margin-bottom: 7px; }
+    .search-box { position: relative; }
+    .search-box > .icon { position: absolute; top: 16px; left: 17px; color: var(--muted); pointer-events: none; }
+    .search-box input { width: 100%; min-height: 51px; padding: 12px 80px 12px 46px; border: 1px solid var(--edge); border-radius: 12px; background: var(--bg); box-shadow: var(--sunken); }
+    .search-box kbd { position: absolute; right: 16px; top: 16px; color: var(--muted); font: 12px inherit; pointer-events: none; }
+    input::placeholder, textarea::placeholder { color: #696458; opacity: 1; }
+    .search-mode select { min-width: 150px; height: 51px; }
+    select, input:not([type=checkbox]), textarea { background: var(--bg); border: 1px solid var(--edge); border-radius: 8px; }
+    select { padding: 10px 31px 10px 12px; max-width: 100%; min-height: 44px; }
+    .filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-bottom: 26px; }
+    .filter { min-width: 125px; flex: 1 1 125px; }
+    .filter select { width: 100%; }
+    .filter .field-label { font-size: 11px; }
+    .filters > .icon-button { border: 1px solid var(--edge); }
+    .filter.category-filter { display: none; }
+    .date-range { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: -10px 0 24px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; }
+    .date-range input { min-height: 44px; padding: 9px 10px; max-width: 100%; }
+    .content { display: grid; grid-template-columns: minmax(240px,1fr) minmax(330px,.95fr); align-items: start; gap: 28px; }
+    .notes-column { min-width: 0; }
+    .group-title { font-size: 11px; font-weight: 600; color: var(--muted); margin: 0; padding: 15px 13px 11px; border-bottom: 1px solid var(--line); }
+    .group-title:first-child { padding-top: 0; }
+    .note { padding: 18px 13px; border-bottom: 1px solid var(--line); width: 100%; text-align: left; display: block; border-radius: 0; }
+    .note:last-child { margin-bottom: 22px; }
+    .note[aria-pressed=true] { background: var(--accent-soft); border-radius: 10px; border-bottom-color: transparent; }
+    .note:hover { background: #eeece6; border-radius: 10px; }
+    .note[aria-pressed=true]:hover { background: #dee5fb; }
+    .note-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; margin-bottom: 9px; }
+    .source-name { display: inline-flex; align-items: center; gap: 7px; }
+    .source-mark { display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; border: 1px solid var(--edge); border-radius: 5px; min-width: 22px; height: 22px; color: var(--muted); }
+    .note-title { font-size: 15px; font-weight: 620; line-height: 1.45; letter-spacing: -.2px; display: block; overflow-wrap: anywhere; }
+    .note-bottom { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; color: var(--muted); font-size: 11px; }
+    .note-bottom span + span::before { content: '·'; display: inline-block; margin-right: 8px; }
+    .note-status { display: inline-flex; align-items: center; gap: 5px; }
+    .note-status .icon { width: 13px; height: 13px; }
+    .match-reason { font-size: 11px; color: var(--accent); margin-top: 9px; display: block; }
+    .detail { position: sticky; top: 25px; padding: 26px; min-width: 0; border-radius: 19px; background: var(--bg); box-shadow: var(--raised); border: 1px solid #e8e5dd; }
+    .detail-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .detail-actions .button { padding: 9px 12px; }
+    .detail h2 { margin: 0 0 16px; font-size: clamp(20px,1.8vw,25px); line-height: 1.35; font-weight: 650; letter-spacing: -.65px; overflow-wrap: anywhere; }
+    .detail-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 21px; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--inset); color: var(--muted); border: 1px solid #d1cdc2; border-radius: 5px; font-size: 11px; }
+    .tag.active { background: #e4ece1; color: #315130; }
+    .tag.try { background: var(--accent-soft); color: #2443a0; }
+    .detail-source { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 12px; padding: 13px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+    .detail-source a { min-height: 44px; display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+    .detail-source .icon { width: 14px; height: 14px; }
+    .detail-date { font-size: 11px; color: var(--muted); margin: 22px 0 0; }
+    .detail-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--line); }
+    .detail-footer .button { padding: 9px 11px; min-height: 44px; }
+    .markdown { font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+    .markdown > :first-child { margin-top: 0; }
+    .markdown p { margin: 0 0 14px; }
+    .markdown h3, .markdown h4, .markdown h5 { margin: 23px 0 9px; font-size: 15px; font-weight: 650; letter-spacing: -.2px; }
+    .markdown h4, .markdown h5 { font-size: 14px; }
+    .markdown ul, .markdown ol { padding-left: 22px; margin: 0 0 15px; }
+    .markdown li { padding-left: 2px; margin: 5px 0; }
+    .markdown pre { max-width: 100%; overflow: auto; padding: 15px; border: 1px solid #d2cfc5; border-radius: 9px; background: var(--inset); font: 12px/1.8 "JetBrains Mono", Consolas, monospace; tab-size: 2; }
+    .markdown :not(pre) > code { background: var(--inset); padding: 2px 4px; border-radius: 3px; font: .88em "JetBrains Mono", Consolas, monospace; }
+    .markdown blockquote { margin: 14px 0; padding: 10px 14px; background: var(--inset); border-radius: 7px; color: var(--muted); }
+    .markdown .task { list-style: none; margin-left: -19px; display: flex; gap: 8px; }
+    .task-box { font-size: 15px; color: var(--muted); }
+    .empty { padding: 60px 16px; text-align: center; color: var(--muted); }
+    .empty .icon { width: 30px; height: 30px; margin-bottom: 10px; }
+    .empty p { margin: 0 0 15px; }
+    .empty .button { font-size: 12px; }
+    .detail-empty { display: flex; min-height: 320px; align-items: center; justify-content: center; }
+    .demo-hint { margin: -10px 0 20px; font-size: 12px; color: var(--muted); }
+    .mobile-menu, .detail-back { display: none; }
+    .footer-note { margin: 22px 0 0; color: var(--muted); font-size: 11px; }
+    dialog { color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 20px; padding: 0; width: min(710px, calc(100% - 32px)); max-height: calc(100dvh - 40px); box-shadow: 16px 20px 70px #1514122b; }
+    dialog::backdrop { background: #28241c52; backdrop-filter: blur(3px); }
+    .dialog-inner { padding: 26px 30px; }
+    .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+    .dialog-header h2 { margin: 0; font-size: 23px; font-weight: 650; letter-spacing: -.6px; }
+    .field { margin-bottom: 17px; min-width: 0; }
+    .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 7px; }
+    .field input, .field select { width: 100%; min-height: 44px; padding: 10px 12px; }
+    .field input, .field textarea { box-shadow: var(--sunken); }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+    textarea { width: 100%; min-height: 210px; resize: vertical; padding: 14px; font: 13px/1.8 "JetBrains Mono", Consolas, monospace; }
+    .editor-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 9px; }
+    .editor-tabs { display: flex; gap: 4px; }
+    .editor-tab { min-height: 44px; padding: 9px 13px; border-radius: 7px; color: var(--muted); }
+    .editor-tab[aria-selected=true] { box-shadow: var(--sunken); color: var(--ink); font-weight: 600; }
+    #editor-preview { min-height: 210px; max-height: 330px; overflow: auto; padding: 16px; border: 1px solid var(--edge); border-radius: 9px; }
+    .ai-button { font-size: 12px; min-height: 44px; padding: 9px 12px; color: var(--accent); border: 1px solid var(--edge); border-radius: 8px; }
+    .ai-note { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+    .dialog-footer { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 20px; }
+    .error-text { color: var(--danger); font-size: 12px; margin: 10px 0 0; }
+    #category-dialog, #confirm-dialog { width: min(440px, calc(100% - 32px)); }
+    #category-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    #confirm-message { color: var(--muted); margin: 0; }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 13px 20px; border: 1px solid var(--edge); background: #24221f; color: #fff; border-radius: 10px; z-index: 100; font-size: 13px; width: max-content; max-width: calc(100% - 30px); box-shadow: 0 6px 20px #0002; }
+    @media (prefers-reduced-motion: no-preference) { button, input, select, a { transition: background-color .12s, box-shadow .12s; } }
+    @media (min-width: 1700px) { .workspace { padding-left: 52px; padding-right: 52px; } }
+    @media (max-width: 1190px) {
+      .shell { grid-template-columns: 190px minmax(0,1fr); }
+      .sidebar { padding: 32px 15px 20px; }
+      .workspace { padding: 34px 26px; }
+      .content { gap: 20px; grid-template-columns: minmax(220px,1fr) minmax(300px,1fr); }
+      .detail { padding: 22px; }
+      .filter { flex-basis: 110px; min-width: 105px; }
+      .filter select { font-size: 12px; padding-left: 9px; }
+    }
+    @media (max-width: 990px) {
+      .content { display: block; }
+      .detail { position: static; margin-top: 22px; }
+      .detail:not(.mobile-open) { display: none; }
+      .content:has(.detail.mobile-open) .notes-column { display: none; }
+      .detail-back { display: inline-flex; }
+      .note { padding: 20px 14px; }
+      .detail { max-width: 720px; margin: 0 auto; }
+    }
+    @media (max-width: 690px) {
+      .shell { display: block; }
+      .sidebar { display: none; position: fixed; left: 0; top: 0; bottom: 0; width: min(290px, 85vw); background: var(--bg); z-index: 31; box-shadow: 14px 0 50px #15141233; overflow: auto; }
+      .sidebar.open { display: flex; }
+      .sidebar-shade { position: fixed; inset: 0; background: #15141266; z-index: 30; border-radius: 0; }
+      .mobile-menu { display: inline-flex; }
+      .workspace { padding: 22px 18px; }
+      .page-header { gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+      .page-heading { flex: 1; gap: 8px; }
+      h1 { font-size: 24px; }
+      #total-label { display: none; }
+      #new-note { font-size: 12px; padding: 10px 12px; }
+      #new-note .icon { width: 16px; height: 16px; }
+      .search-row { gap: 9px; }
+      .search-mode select { min-width: 0; width: 123px; padding-left: 9px; font-size: 12px; }
+      .search-box input { padding-right: 13px; font-size: 13px; }
+      .search-box kbd { display: none; }
+      .filters { gap: 9px; margin-bottom: 22px; }
+      .filter { flex: 1 1 calc(50% - 9px); min-width: 0; }
+      .filter.category-filter { display: block; }
+      .filters > .icon-button { margin-left: auto; }
+      .filters .group-filter { flex-basis: calc(100% - 54px); }
+      .detail { padding: 21px 18px; }
+      .note-title { font-size: 16px; }
+      .note-bottom, .note-top { font-size: 12px; }
+      .markdown { font-size: 15px; }
+      .dialog-inner { padding: 19px; }
+      dialog { width: calc(100% - 20px); max-height: calc(100dvh - 20px); }
+      .field-grid.three { grid-template-columns: 1fr 1fr; }
+      .field-grid.three .field:last-child { grid-column: 1 / -1; }
+      .dialog-footer { flex-wrap: wrap; }
+      .date-range { padding: 12px; }
+      .date-range > div { flex: 1 1 120px; min-width: 0; }
+      .date-range input { width: 100%; }
+    }
+    @media (max-width: 370px) {
+      .workspace { padding: 18px 12px; }
+      .page-heading { flex-basis: calc(100% - 60px); }
+      #new-note { margin-left: 54px; }
+      .search-row { align-items: stretch; flex-direction: column; }
+      .search-mode select { width: 100%; }
+      .field-grid, .field-grid.three { display: block; }
+    }
+    @media print { .sidebar, .page-header, .search-row, .filters, .notes-column, .detail-actions, .detail-footer, .footer-note { display: none; } .shell, .content { display: block; } .detail { display: block !important; box-shadow: none; border: 0; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Ke catatan</a>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi DevPocket">
+      <div class="brand">DevPocket</div>
+      <nav class="nav" id="main-nav" aria-label="Catatan"></nav>
+      <section class="categories" aria-labelledby="categories-heading">
+        <div class="section-line"><h2 id="categories-heading">Kategori</h2><button class="icon-button" id="add-category" aria-label="Tambah kategori" title="Tambah kategori"></button></div>
+        <nav class="nav" id="category-nav" aria-label="Kategori"></nav>
+      </section>
+      <footer class="sidebar-footer">
+        <p>Prototype · data contoh</p>
+        <p id="storage-status">Tersimpan di browser ini</p>
+        <button class="text-button" id="reset-data">Reset data contoh</button>
+      </footer>
+    </aside>
+    <button class="sidebar-shade" id="sidebar-shade" aria-label="Tutup menu" hidden></button>
+    <main class="workspace" id="main" tabindex="-1">
+      <header class="page-header">
+        <button class="icon-button mobile-menu" id="mobile-menu" aria-label="Buka menu" aria-controls="sidebar" aria-expanded="false"></button>
+        <div class="page-heading"><h1 id="page-title">Semua item</h1><span id="total-label"></span></div>
+        <button class="button primary" id="new-note"></button>
+      </header>
+      <div class="search-row">
+        <div class="search-field">
+          <label class="field-label" for="search">Cari catatan</label>
+          <div class="search-box"><span id="search-icon"></span><input id="search" type="search" placeholder="Judul, isi, atau link..." autocomplete="off"><kbd aria-hidden="true">Ctrl K</kbd></div>
+        </div>
+        <div class="search-mode"><label class="field-label" for="search-mode">Pencarian</label><select id="search-mode"><option value="keyword">Kata</option><option value="description">Deskripsi · demo</option></select></div>
+      </div>
+      <p class="demo-hint" id="search-demo" hidden>Simulasi lokal dengan kata dan sinonim. Tanpa API AI.</p>
+      <section class="filters" aria-label="Filter catatan">
+        <div class="filter"><label class="field-label" for="platform-filter">Platform</label><select id="platform-filter"></select></div>
+        <div class="filter category-filter"><label class="field-label" for="category-filter">Kategori</label><select id="category-filter"></select></div>
+        <div class="filter"><label class="field-label" for="usage-filter">Penggunaan</label><select id="usage-filter"><option value="">Semua status</option><option value="try">Ingin dicoba</option><option value="active">Aktif digunakan</option><option value="reference">Referensi</option><option value="none">Belum diisi</option></select></div>
+        <div class="filter group-filter"><label class="field-label" for="group-by">Kelompokkan</label><select id="group-by"><option value="date">Tanggal ditambahkan</option><option value="platform">Platform</option><option value="none">Tanpa grup</option></select></div>
+        <button class="icon-button" id="toggle-dates" aria-label="Filter rentang tanggal" aria-controls="date-range" aria-expanded="false" title="Rentang tanggal"></button>
+      </section>
+      <div class="date-range" id="date-range" hidden>
+        <div><label class="field-label" for="date-from">Dari tanggal</label><input type="date" id="date-from"></div>
+        <div><label class="field-label" for="date-to">Sampai tanggal</label><input type="date" id="date-to"></div>
+        <button class="button quiet" id="clear-filters">Hapus filter</button>
+        <p id="date-error" class="error-text" role="alert" hidden></p>
+      </div>
+      <div class="content">
+        <section class="notes-column" aria-label="Daftar catatan"><div id="notes" aria-live="polite"></div></section>
+        <article class="detail" id="detail" aria-label="Detail catatan"></article>
+      </div>
+      <p class="footer-note">Data contoh. AI disimulasikan; link tidak dibaca otomatis.</p>
+    </main>
+  </div>
+
+  <dialog id="note-dialog" aria-labelledby="note-dialog-title">
+    <form id="note-form" class="dialog-inner" novalidate>
+      <div class="dialog-header"><h2 id="note-dialog-title">Tambah catatan</h2><button type="button" class="icon-button" data-close="note-dialog" aria-label="Tutup editor"></button></div>
+      <div class="field"><label for="note-url">Link sumber <span style="font-weight:400;color:var(--muted)">(opsional)</span></label><input id="note-url" type="url" placeholder="https://..." maxlength="2000"></div>
+      <div class="field"><label for="note-title">Judul</label><input id="note-title" placeholder="Boleh kosong untuk Draft" maxlength="140"></div>
+      <div class="field-grid three">
+        <div class="field"><label for="note-stage">Simpan ke</label><select id="note-stage"><option value="draft">Draft</option><option value="collection">Koleksi</option></select></div>
+        <div class="field"><label for="note-category">Kategori</label><select id="note-category"></select></div>
+        <div class="field"><label for="note-usage">Penggunaan</label><select id="note-usage"><option value="">Belum diisi</option><option value="try">Ingin dicoba</option><option value="active">Aktif digunakan</option><option value="reference">Referensi</option></select></div>
+      </div>
+      <div class="field-grid">
+        <div class="field"><label for="note-platform">Platform</label><select id="note-platform"></select></div>
+        <div class="field"><label for="note-related">Link repo / dokumentasi</label><input id="note-related" type="url" placeholder="https://github.com/..." maxlength="2000"></div>
+      </div>
+      <div class="field">
+        <label id="body-label" for="note-body">Catatan Markdown</label>
+        <div class="editor-toolbar">
+          <div class="editor-tabs" role="tablist" aria-label="Mode editor"><button type="button" role="tab" class="editor-tab" id="write-tab" aria-selected="true" aria-controls="write-panel">Tulis</button><button type="button" role="tab" class="editor-tab" id="preview-tab" aria-selected="false" aria-controls="editor-preview" tabindex="-1">Preview</button></div>
+          <button type="button" class="ai-button" id="generate-note">Buat dengan AI · demo</button>
+        </div>
+        <div role="tabpanel" id="write-panel" aria-labelledby="write-tab"><textarea id="note-body" placeholder="Tulis catatan, atau simpan link dulu..." maxlength="40000"></textarea></div>
+        <div role="tabpanel" id="editor-preview" class="markdown" aria-labelledby="preview-tab" hidden></div>
+        <p class="ai-note" id="ai-feedback" role="status">Demo memakai teks yang diisi atau contoh bawaan. Tidak membaca link.</p>
+      </div>
+      <p id="form-error" class="error-text" role="alert" hidden></p>
+      <div class="dialog-footer"><button type="button" class="button quiet" data-close="note-dialog">Batal</button><button type="submit" class="button primary" id="save-note">Simpan ke Draft</button></div>
+    </form>
+  </dialog>
+  <dialog id="category-dialog" aria-labelledby="category-dialog-title"><form id="category-form" class="dialog-inner">
+    <div class="dialog-header"><h2 id="category-dialog-title">Kategori</h2><button type="button" class="icon-button" data-close="category-dialog" aria-label="Tutup kategori"></button></div>
+    <div id="category-list"></div>
+    <div class="field"><label for="new-category">Kategori baru</label><input id="new-category" required maxlength="36" placeholder="Nama kategori" autocomplete="off"></div>
+    <p id="category-error" class="error-text" role="alert" hidden></p>
+    <div class="dialog-footer"><button type="button" class="button quiet" data-close="category-dialog">Selesai</button><button type="submit" class="button primary">Tambah</button></div>
+  </form></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-inner">
+    <div class="dialog-header"><h2 id="confirm-title"></h2><button type="button" class="icon-button" data-close="confirm-dialog" aria-label="Tutup konfirmasi"></button></div>
+    <p id="confirm-message"></p><div class="dialog-footer"><button type="button" class="button quiet" data-close="confirm-dialog">Batal</button><button type="button" class="button primary" id="confirm-action">Hapus</button></div>
+  </div></dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script>
+    'use strict';
+    const $ = (s) => document.querySelector(s);
+    const icons = {
+      all: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+      draft: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 14h8M8 17h5"/>',
+      collection: '<path d="M4 6h16v14H4zM2 3h20v3H2zM9 11h6"/>',
+      category: '<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3z"/>',
+      plus: '<path d="M12 5v14M5 12h14"/>', search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+      calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M7 14h2M13 14h2"/>',
+      edit: '<path d="m14 5 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14z"/>',
+      close: '<path d="m6 6 12 12M18 6 6 18"/>', menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+      arrow: '<path d="M19 12H5m6-6-6 6 6 6"/>', external: '<path d="M14 3h7v7M21 3 10 14M10 3H4v17h17v-6"/>',
+      download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>', trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
+      check: '<path d="m5 12 4 4L19 6"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      book: '<path d="M4 4h7a3 3 0 0 1 3 3v14a4 4 0 0 0-3-2H4zM14 7a3 3 0 0 1 3-3h3v15h-3a4 4 0 0 0-3 2"/>'
+    };
+    const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.draft}</svg>`;
+    const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const safeURL = (s) => { try { const u = new URL(s); return ['https:', 'http:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } };
+    const usageNames = {try:'Ingin dicoba', active:'Aktif digunakan', reference:'Referensi'};
+    const platformMarks = {Instagram:'IG', Threads:'Th', Facebook:'Fb', GitHub:'GH', Web:'W'};
+    const platforms = Object.keys(platformMarks);
+    const STORAGE_KEY = 'devpocket-prototype-v1';
+    const dayBefore = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString(); };
+    function seedData() {
+      return {version:1, categories:['Project Open Source','Tools','Library','Konsep'], items:[
+        {id:'sample-motion', title:'Motion untuk animasi React', platform:'Instagram', stage:'collection', category:'Library', usage:'try', createdAt:dayBefore(0), updatedAt:dayBefore(0), url:'', related:'https://motion.dev/docs/react', body:'Library animasi yang ingin dicoba untuk transisi komponen React.\n\n## Yang mau dicoba\n\n- [ ] Animasi saat komponen muncul\n- [ ] Transisi daftar saat item ditambah\n- [ ] Hormati preferensi reduced motion\n\n```jsx\n<motion.div\n  initial={{ opacity: 0 }}\n  animate={{ opacity: 1 }}\n>\n  Catatan baru\n</motion.div>\n```\n\nCoba di komponen kecil dulu.'},
+        {id:'sample-hono', title:'Hono untuk API di Workers', platform:'Threads', stage:'collection', category:'Library', usage:'active', createdAt:dayBefore(0), updatedAt:dayBefore(0), url:'', related:'https://hono.dev/docs/', body:'Dipakai sebagai referensi untuk menyusun endpoint DevPocket.\n\n## Catatan\n\n- Pisahkan route dari pengolahan data.\n- Simpan API key di backend.\n- Respons error perlu jelas.\n\n```js\napp.get("/api/items", async (c) => {\n  return c.json({ items: [] });\n});\n```'},
+        {id:'sample-draft-1', title:'Cek tool untuk screenshot kode', platform:'Instagram', stage:'draft', category:'', usage:'', createdAt:dayBefore(0), updatedAt:dayBefore(0), url:'', related:'', body:'Lihat lagi nanti. Ingin bikin potongan kode lebih mudah dibagikan.'},
+        {id:'sample-cache', title:'Kapan perlu pakai caching?', platform:'Facebook', stage:'collection', category:'Konsep', usage:'try', createdAt:dayBefore(1), updatedAt:dayBefore(1), url:'', related:'', body:'Catatan percobaan untuk memahami cache dan invalidation.\n\n## Percobaan\n\n1. Buat endpoint yang mengambil data berulang.\n2. Bandingkan respons dengan dan tanpa cache.\n3. Tentukan kapan cache perlu dibuang.\n\n> Jangan pakai hasil cache yang sudah tidak sesuai dengan data terbaru.'},
+        {id:'sample-excalidraw', title:'Excalidraw untuk sketsa alur', platform:'GitHub', stage:'collection', category:'Project Open Source', usage:'reference', createdAt:dayBefore(1), updatedAt:dayBefore(1), url:'https://github.com/excalidraw/excalidraw', related:'', body:'Simpan untuk kebutuhan menggambar flow sebelum mulai implementasi.\n\n- Cocok untuk coretan arsitektur awal.\n- Gunakan saat alurnya lebih mudah dijelaskan dengan gambar.'},
+        {id:'sample-forms', title:'Validasi form dengan Zod', platform:'Threads', stage:'collection', category:'Library', usage:'active', createdAt:dayBefore(2), updatedAt:dayBefore(2), url:'', related:'https://zod.dev/', body:'Referensi validasi input judul dan link catatan.\n\n```js\nconst itemSchema = z.object({\n  title: z.string().min(1),\n  url: z.url().optional(),\n});\n```\n\nValidasi server tetap diperlukan.'},
+        {id:'sample-index', title:'Database index, simpan penjelasannya', platform:'Instagram', stage:'collection', category:'Konsep', usage:'reference', createdAt:dayBefore(3), updatedAt:dayBefore(3), url:'', related:'', body:'Index membantu pencarian pada kolom tertentu. Simpan sebagai pengingat saat menentukan pola query.\n\n## Yang perlu diperhatikan\n\n- Pilih index berdasarkan query yang benar-benar digunakan.\n- Periksa query plan.\n- Ada biaya tambahan saat menulis data.'},
+        {id:'sample-draft-2', title:'', platform:'GitHub', stage:'draft', category:'', usage:'', createdAt:dayBefore(4), updatedAt:dayBefore(4), url:'https://github.com/actualbudget/actual', related:'', body:''},
+        {id:'sample-bruno', title:'Bruno untuk mencoba endpoint API', platform:'GitHub', stage:'collection', category:'Tools', usage:'try', createdAt:dayBefore(5), updatedAt:dayBefore(5), url:'https://github.com/usebruno/bruno', related:'', body:'Ingin mencoba untuk menyimpan dan menjalankan request saat mengerjakan backend.\n\n- [ ] Buat collection request DevPocket\n- [ ] Coba GET dan POST item\n- [ ] Periksa respons error'}
+      ]};
+    }
+    let data = seedData();
+    let storageAvailable = true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.version !== 1 || !Array.isArray(parsed.items) || !Array.isArray(parsed.categories) || !parsed.categories.every(c => typeof c === 'string') || !parsed.items.every(i => typeof i.id === 'string' && typeof i.body === 'string' && typeof i.title === 'string' && typeof i.category === 'string' && typeof i.url === 'string' && typeof i.related === 'string' && ['', 'try', 'active', 'reference'].includes(i.usage) && platforms.includes(i.platform) && ['draft','collection'].includes(i.stage) && !isNaN(Date.parse(i.createdAt)))) throw new Error('Invalid saved data');
+        data = parsed;
+      }
+    } catch { storageAvailable = false; }
+    let state = {scope:'all', category:'', selected:'sample-motion', query:'', mode:'keyword', platform:'', usage:'', group:'date', from:'', to:''};
+    let editingId = null, opener = null, confirmCallback = null, toastTimer, aiTimer;
+    function persist() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); storageAvailable = true; }
+      catch { storageAvailable = false; }
+      $('#storage-status').textContent = storageAvailable ? 'Tersimpan di browser ini' : 'Hanya tersimpan di sesi ini';
+    }
+    function toast(text) { clearTimeout(toastTimer); $('#toast').textContent = text; $('#toast').hidden = false; toastTimer = setTimeout(() => $('#toast').hidden = true, 4000); }
+    function showDialog(id) { opener = document.activeElement; $(id).showModal(); }
+    function closeDialog(id) { $(id).close(); if (id === '#note-dialog') { clearTimeout(aiTimer); $('#generate-note').disabled = false; $('#generate-note').textContent = 'Buat dengan AI · demo'; } if (opener?.isConnected) opener.focus(); else $('#new-note').focus(); }
+    function titleOf(item) { if (item.title) return item.title; if (item.url) { try { return new URL(item.url).hostname + new URL(item.url).pathname.replace(/\/$/, ''); } catch {} } return 'Catatan tanpa judul'; }
+    const dateKey = (iso) => new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Jakarta'}).format(new Date(iso));
+    const dateText = (iso, full = false) => new Intl.DateTimeFormat('id-ID', {day:'numeric',month:full?'long':'short',...(full?{year:'numeric'}:{}),timeZone:'Asia/Jakarta'}).format(new Date(iso));
+    function groupTitle(key) {
+      const today = dateKey(new Date().toISOString());
+      return key === today ? 'Hari ini' : dateText(key + 'T12:00:00+07:00', true);
+    }
+    function inlineMarkdown(text) {
+      const tokens = [];
+      let source = text.replace(/`([^`]+)`/g, (_, code) => { tokens.push('<code>' + escapeHTML(code) + '</code>'); return '\u0000' + (tokens.length - 1) + '\u0000'; });
+      source = escapeHTML(source);
+      source = source.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, raw) => { const url = safeURL(raw.replaceAll('&amp;','&')); return url ? `<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : label; });
+      source = source.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>');
+      return source.replace(/\u0000(\d+)\u0000/g, (_, n) => tokens[Number(n)] || '');
+    }
+    function markdown(text) {
+      const lines = String(text).split('\n'); let html = '', list = '', code = null;
+      const endList = () => { if (list) { html += `</${list}>`; list = ''; } };
+      for (const line of lines) {
+        if (line.startsWith('```')) { endList(); if (code !== null) { html += `<pre><code>${escapeHTML(code.join('\n'))}</code></pre>`; code = null; } else { code = []; } continue; }
+        if (code !== null) { code.push(line); continue; }
+        if (!line.trim()) { endList(); continue; }
+        const heading = line.match(/^(#{1,6})\s+(.+)/);
+        const bullet = line.match(/^\s*[-*]\s+(.+)/); const ordered = line.match(/^\s*\d+\.\s+(.+)/);
+        if (heading) { endList(); const level = Math.min(Math.max(heading[1].length + 1, 3), 5); html += `<h${level}>${inlineMarkdown(heading[2])}</h${level}>`; }
+        else if (bullet || ordered) { const type = bullet ? 'ul' : 'ol'; if (list !== type) { endList(); html += `<${type}>`; list = type; } const content = (bullet || ordered)[1]; const task = content.match(/^\[([ xX])\]\s+(.+)/); html += task ? `<li class="task"><span class="task-box" role="img" aria-label="${task[1] === ' ' ? 'Belum selesai':'Selesai'}">${task[1] === ' ' ? '☐':'☑'}</span><span>${inlineMarkdown(task[2])}</span></li>` : `<li>${inlineMarkdown(content)}</li>`; }
+        else if (line.startsWith('> ')) { endList(); html += `<blockquote>${inlineMarkdown(line.slice(2))}</blockquote>`; }
+        else { endList(); html += `<p>${inlineMarkdown(line)}</p>`; }
+      }
+      endList(); if (code !== null) html += `<pre><code>${escapeHTML(code.join('\n'))}</code></pre>`;
+      return html;
+    }
+    const synonymSets = [ ['animasi','animation','animate','motion','gerak','transisi'], ['login','auth','authentication','autentikasi','masuk'], ['cache','caching','redis','invalidation'], ['form','formulir','validasi','validation','zod'], ['gambar','diagram','sketsa','alur','excalidraw'], ['api','endpoint','request','hono','workers'], ['database','sql','sqlite','index','indeks'], ['screenshot','tangkapan','potongan'], ['github','repo','repository','opensource'] ];
+    const stopWords = new Set('aku saya yang buat untuk di dari ke dan atau itu dulu pernah simpan nyimpen kayak kayanya kayaknya sesuatu tentang ada bisa dengan mau coba mencari cariin cari ingin sebuah nya lebih jadi pakai dipakai sepertinya tool tools library konsep'.split(' '));
+    function findScore(item) {
+      const corpus = [titleOf(item),item.body,item.url,item.related,item.category,item.platform,usageNames[item.usage] || '',item.stage === 'draft'?'draft':'koleksi'].join(' ').toLowerCase();
+      const query = state.query.toLowerCase().trim();
+      if (!query) return {score:1, words:[]};
+      if (state.mode === 'keyword') return {score:corpus.includes(query)?1:0, words:[]};
+      const words = [...new Set(query.split(/[^\p{L}\p{N}]+/u).filter(w=>w.length>1 && !stopWords.has(w)))];
+      const matches = []; let score = 0;
+      for (const word of words) {
+        if (corpus.includes(word)) { score += 3; matches.push(word); }
+        else { const group = synonymSets.find(s=>s.includes(word)); if (group && group.some(w=>corpus.includes(w))) { score += 1; matches.push(word); } }
+      }
+      return {score, words:matches.slice(0,3)};
+    }
+    function getResults() {
+      return data.items.filter(i => (state.scope === 'all' || i.stage === state.scope) && (!state.category || i.category === state.category) && (!state.platform || i.platform === state.platform) && (!state.usage || (state.usage === 'none' ? !i.usage : i.usage === state.usage)) && (!state.from || dateKey(i.createdAt) >= state.from) && (!state.to || dateKey(i.createdAt) <= state.to)).map(item => ({item,...findScore(item)})).filter(r=>r.score>0).sort((a,b) => (state.mode === 'description' && state.query ? b.score-a.score : 0) || b.item.createdAt.localeCompare(a.item.createdAt));
+    }
+    function renderNavigation() {
+      $('#main-nav').innerHTML = [['all','Semua item','all'],['draft','Draft','draft'],['collection','Koleksi','collection']].map(([scope,label,glyph]) => `<button class="nav-button" data-scope="${scope}" ${state.scope === scope && !state.category?'aria-current="page"':''}>${icon(glyph)}<span>${label}</span><span class="count">${data.items.filter(i=>scope === 'all'||i.stage===scope).length}</span></button>`).join('');
+      $('#category-nav').innerHTML = data.categories.map(category => `<button class="nav-button" data-category="${escapeHTML(category)}" ${state.category===category?'aria-current="page"':''}>${icon('category')}<span>${escapeHTML(category)}</span><span class="count">${data.items.filter(i=>i.category===category).length}</span></button>`).join('');
+      $('#category-filter').innerHTML = '<option value="">Semua kategori</option>' + data.categories.map(c=>`<option ${state.category===c?'selected':''}>${escapeHTML(c)}</option>`).join('');
+    }
+    function renderNotes() {
+      const results = getResults();
+      $('#page-title').textContent = state.query.trim() ? 'Hasil pencarian' : state.category || ({all:'Semua item', draft:'Draft', collection:'Koleksi'}[state.scope]);
+      $('#total-label').textContent = results.length + ' catatan';
+      if (!results.some(r=>r.item.id===state.selected)) state.selected = results[0]?.item.id || null;
+      const groups = new Map();
+      for (const result of results) {
+        const key = state.mode==='description' && state.query ? 'Hasil paling cocok' : state.group==='platform'?result.item.platform:state.group==='date'?dateKey(result.item.createdAt):'';
+        if (!groups.has(key)) groups.set(key, []); groups.get(key).push(result);
+      }
+      let html = '';
+      for (const [key, entries] of groups) {
+        if (key) html += `<h2 class="group-title">${escapeHTML(state.group==='date' && !(state.mode==='description'&&state.query)?groupTitle(key):key)}</h2>`;
+        html += entries.map(({item:i, words})=>`<button class="note" data-item="${escapeHTML(i.id)}" aria-pressed="${state.selected===i.id}"><span class="note-top"><span class="source-name"><span class="source-mark" aria-hidden="true">${platformMarks[i.platform]}</span>${i.platform}</span><time datetime="${escapeHTML(i.createdAt)}">${dateText(i.createdAt)}</time></span><span class="note-title">${escapeHTML(titleOf(i))}</span><span class="note-bottom"><span>${i.stage==='draft'?'Draft':escapeHTML(i.category||'Tanpa kategori')}</span>${i.usage?`<span class="note-status">${icon(i.usage==='active'?'check':i.usage==='try'?'clock':'book')}${usageNames[i.usage]}</span>`:''}</span>${words.length?`<span class="match-reason">Cocok: ${escapeHTML(words.join(', '))}</span>`:''}</button>`).join('');
+      }
+      $('#notes').innerHTML = html || `<div class="empty">${icon('search')}<p>${state.query || state.platform || state.usage || state.category || state.from || state.to?'Tidak ada yang cocok':'Belum ada catatan'}</p><button class="button quiet" data-empty-action>${state.query || state.platform || state.usage || state.category || state.from || state.to?'Hapus pencarian & filter':'Tambah catatan'}</button></div>`;
+      if (!results.length) $('#detail').classList.remove('mobile-open');
+      renderDetail();
+    }
+    function renderDetail() {
+      const item = data.items.find(i=>i.id===state.selected);
+      if (!item) { $('#detail').innerHTML = `<div class="empty detail-empty"><p>Pilih catatan untuk dibaca.</p></div>`; return; }
+      const url = safeURL(item.url), related = safeURL(item.related);
+      $('#detail').innerHTML = `<div class="detail-actions"><button class="icon-button detail-back" data-back aria-label="Kembali ke daftar">${icon('arrow')}</button><span class="source-name" style="font-size:12px;color:var(--muted)"><span class="source-mark" aria-hidden="true">${platformMarks[item.platform]}</span>${item.platform}</span><button class="button quiet" data-edit>${icon('edit')}Edit</button></div><h2>${escapeHTML(titleOf(item))}</h2><div class="detail-meta"><span class="tag">${item.stage==='draft'?'Draft':escapeHTML(item.category||'Tanpa kategori')}</span>${item.usage?`<span class="tag ${item.usage}">${usageNames[item.usage]}</span>`:''}</div>${url||related?`<div class="detail-source">${url?`<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">Buka sumber${icon('external')}</a>`:''}${related?`<a href="${escapeHTML(related)}" target="_blank" rel="noopener noreferrer">Repo / dokumentasi${icon('external')}</a>`:''}</div>`:''}<div class="markdown">${item.body?markdown(item.body):'<p style="color:var(--muted)">Belum ada isi. Lengkapi saat sempat.</p>'}</div><p class="detail-date">Ditambahkan ${dateText(item.createdAt,true)}</p>${url&&/instagram\.com\/(reel|p)\//.test(url)?'<p class="ai-note">Embed belum diaktifkan di prototype. Gunakan Buka sumber.</p>':''}<div class="detail-footer"><button class="button quiet" data-export>${icon('download')}Ekspor .md</button><button class="icon-button" data-delete aria-label="Hapus catatan" title="Hapus catatan">${icon('trash')}</button></div>${item.stage==='draft'?'<button class="button primary" data-tidy style="margin-top:16px;width:100%">Rapikan ke Koleksi</button>':''}`;
+    }
+    function render() { renderNavigation(); renderNotes(); }
+    function resetFilters() {
+      Object.assign(state, {query:'',platform:'',usage:'',from:'',to:'',category:''});
+      for (const id of ['search','platform-filter','usage-filter','date-from','date-to','category-filter']) $('#'+id).value='';
+      $('#date-error').hidden = true; render();
+    }
+    function closeMenu() { $('#sidebar').classList.remove('open'); $('#sidebar-shade').hidden = true; $('#mobile-menu').setAttribute('aria-expanded','false'); if (matchMedia('(max-width:690px)').matches) $('#sidebar').inert=true; }
+    function changeScope(scope, category='') { state.scope=scope; state.category=category; state.query=''; $('#search').value=''; $('#detail').classList.remove('mobile-open'); closeMenu(); render(); }
+    function setEditorTab(preview) {
+      $('#write-tab').setAttribute('aria-selected',String(!preview)); $('#preview-tab').setAttribute('aria-selected',String(preview));
+      $('#write-tab').tabIndex=preview?-1:0; $('#preview-tab').tabIndex=preview?0:-1;
+      $('#write-panel').hidden=preview; $('#editor-preview').hidden=!preview;
+      if (preview) $('#editor-preview').innerHTML=markdown($('#note-body').value)||'<p>Belum ada isi.</p>';
+    }
+    function openEditor(id = null, tidy = false) {
+      editingId=id; const item=data.items.find(i=>i.id===id);
+      $('#note-dialog-title').textContent=item?'Edit catatan':'Tambah catatan';
+      $('#note-title').value=item?.title||''; $('#note-url').value=item?.url||''; $('#note-related').value=item?.related||''; $('#note-body').value=item?.body||'';
+      $('#note-stage').value=tidy?'collection':item?.stage||'draft';
+      $('#note-category').innerHTML='<option value="">Belum diisi</option>'+data.categories.map(c=>`<option>${escapeHTML(c)}</option>`).join('');
+      $('#note-category').value=item?.category||state.category||''; $('#note-usage').value=item?.usage||'';
+      $('#note-platform').value=item?.platform||'auto'; $('#form-error').hidden=true; $('#ai-feedback').textContent='Demo memakai teks yang diisi atau contoh bawaan. Tidak membaca link.'; setEditorTab(false); updateSaveLabel(); showDialog('#note-dialog');
+    }
+    function updateSaveLabel() { $('#save-note').textContent=$('#note-stage').value==='draft'?'Simpan ke Draft':'Simpan ke Koleksi'; }
+    function detectPlatform(url) { const hostname = new URL(url).hostname.toLowerCase(); if (hostname==='instagram.com'||hostname.endsWith('.instagram.com')) return 'Instagram'; if (['threads.net','threads.com'].some(d=>hostname===d||hostname.endsWith('.'+d))) return 'Threads'; if (hostname==='facebook.com'||hostname.endsWith('.facebook.com')||hostname==='fb.watch') return 'Facebook'; if (hostname==='github.com'||hostname.endsWith('.github.com')) return 'GitHub'; return 'Web'; }
+    function formError(text, id) { $('#form-error').textContent=text; $('#form-error').hidden=false; if (id) $(id).focus(); }
+    function saveItem(event) {
+      event.preventDefault();
+      const title=$('#note-title').value.trim(), body=$('#note-body').value.trim(), rawURL=$('#note-url').value.trim(), rawRelated=$('#note-related').value.trim();
+      const url=rawURL?safeURL(rawURL):'', related=rawRelated?safeURL(rawRelated):'';
+      const stage=$('#note-stage').value, category=$('#note-category').value, usage=$('#note-usage').value;
+      if (rawURL&&!url) return formError('Gunakan link sumber http:// atau https://.','#note-url');
+      if (rawRelated&&!related) return formError('Gunakan link repo / dokumentasi http:// atau https://.','#note-related');
+      if (!title&&!url&&!body&&!related) return formError('Isi link, judul, atau catatan dulu.','#note-url');
+      if (stage==='collection'&&!title) return formError('Isi judul sebelum masuk Koleksi.','#note-title');
+      if (stage==='collection'&&!category) return formError('Pilih kategori untuk Koleksi.','#note-category');
+      if (stage==='collection'&&!usage) return formError('Pilih penggunaan untuk Koleksi.','#note-usage');
+      const old=data.items.find(i=>i.id===editingId); const now=new Date().toISOString();
+      const item={id:old?.id||'item-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),title,body,url,related,stage,category,usage,platform:$('#note-platform').value==='auto'?(url?detectPlatform(url):'Web'):$('#note-platform').value,createdAt:old?.createdAt||now,updatedAt:now};
+      if (old) data.items[data.items.indexOf(old)]=item; else data.items.unshift(item);
+      state.selected=item.id; state.scope=stage; resetFilters(); persist(); render(); closeDialog('#note-dialog'); $('#detail').classList.add('mobile-open');
+      toast(storageAvailable?'Tersimpan':'Tersimpan untuk sesi ini. Penyimpanan browser tidak tersedia.');
+    }
+    function confirmAction(title,message,label,callback) { $('#confirm-title').textContent=title; $('#confirm-message').textContent=message; $('#confirm-action').textContent=label; confirmCallback=callback; showDialog('#confirm-dialog'); }
+    function exportNote(item) {
+      const text=`# ${titleOf(item)}\n\n${item.body}\n\n---\nPlatform: ${item.platform}\nDitambahkan: ${dateText(item.createdAt,true)}\nStatus: ${item.stage==='draft'?'Draft':'Koleksi'}\n${item.category?'Kategori: '+item.category+'\n':''}${item.usage?'Penggunaan: '+usageNames[item.usage]+'\n':''}${item.url?'Sumber: '+item.url+'\n':''}${item.related?'Link terkait: '+item.related+'\n':''}`;
+      const url=URL.createObjectURL(new Blob([text],{type:'text/markdown;charset=utf-8'})); const a=document.createElement('a'); a.href=url; a.download=(titleOf(item).replace(/[^\p{L}\p{N} -]/gu,'').trim().replace(/\s+/g,'-').slice(0,80)||'catatan')+'.md'; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('Markdown diekspor');
+    }
+    function demoGenerate() {
+      const body=$('#note-body').value.trim(), rawURL=$('#note-url').value.trim(), title=$('#note-title').value.trim();
+      if (!body&&!rawURL&&!title) return formError('Isi link atau catatan sebagai bahan demo.','#note-url');
+      $('#form-error').hidden=true; $('#generate-note').disabled=true; $('#generate-note').textContent='Menyusun contoh...'; $('#ai-feedback').textContent='Menyusun contoh dari bahan lokal...';
+      aiTimer=setTimeout(()=>{
+        const sample=data.items.find(i=>i.id.startsWith('sample-') && rawURL && [i.url,i.related].filter(Boolean).some(u=>u===rawURL||u.replace(/\/$/,'')===rawURL.replace(/\/$/,'')) && i.body);
+        if (sample) { if (!title) $('#note-title').value=sample.title; $('#note-body').value=sample.body; if (!$('#note-category').value) $('#note-category').value=sample.category; }
+        else if (body) { if (!title) $('#note-title').value=body.replace(/^#+\s*/,'').split('\n')[0].slice(0,100); $('#note-body').value=body.startsWith('#')?body:'## Catatan\n\n'+body; }
+        else { let name=title; if (!name && safeURL(rawURL)) { const u=new URL(rawURL); name=u.pathname.split('/').filter(Boolean).slice(-1)[0]||u.hostname; } $('#note-title').value=name||'Catatan baru'; $('#note-body').value='## Catatan\n\n[Isi sumber belum dibaca dalam demo ini.]\n\n- [ ] Baca sumber\n- [ ] Tambahkan poin yang ingin diingat'; }
+        $('#generate-note').disabled=false; $('#generate-note').textContent='Buat dengan AI · demo'; $('#ai-feedback').textContent='Simulasi selesai. Tidak ada link yang dibaca.'; setEditorTab(false);
+      },650);
+    }
+    $('#main-nav').addEventListener('click',e=>{const b=e.target.closest('[data-scope]');if(b) changeScope(b.dataset.scope);});
+    $('#category-nav').addEventListener('click',e=>{const b=e.target.closest('[data-category]');if(b) changeScope('all',b.dataset.category);});
+    $('#notes').addEventListener('click',e=>{
+      const b=e.target.closest('[data-item]'); if(b) {state.selected=b.dataset.item;renderNotes();$('#detail').classList.add('mobile-open');if(matchMedia('(max-width:990px)').matches) {$('#detail').scrollIntoView({block:'start'});$('#detail [data-back]').focus();}}
+      if(e.target.closest('[data-empty-action]')) {if(state.query||state.platform||state.usage||state.category||state.from||state.to) resetFilters();else openEditor();}
+    });
+    $('#detail').addEventListener('click',e=>{
+      const item=data.items.find(i=>i.id===state.selected);if(!item)return;
+      if(e.target.closest('[data-edit]'))openEditor(item.id);
+      if(e.target.closest('[data-tidy]'))openEditor(item.id,true);
+      if(e.target.closest('[data-back]')) {$('#detail').classList.remove('mobile-open');$('#notes [aria-pressed=true]')?.focus();}
+      if(e.target.closest('[data-export]'))exportNote(item);
+      if(e.target.closest('[data-delete]'))confirmAction('Hapus catatan?','“'+titleOf(item)+'” akan dihapus dari browser ini.','Hapus',()=>{data.items=data.items.filter(i=>i.id!==item.id);persist();$('#detail').classList.remove('mobile-open');render();toast('Catatan dihapus');});
+    });
+    $('#new-note').addEventListener('click',()=>openEditor());
+    $('#note-form').addEventListener('submit',saveItem);
+    $('#note-stage').addEventListener('change',updateSaveLabel);
+    $('#generate-note').addEventListener('click',demoGenerate);
+    $('#write-tab').addEventListener('click',()=>setEditorTab(false)); $('#preview-tab').addEventListener('click',()=>setEditorTab(true));
+    $('.editor-tabs').addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const preview=e.key==='End'||(e.key!=='Home'&&document.activeElement.id==='write-tab');setEditorTab(preview);$(preview?'#preview-tab':'#write-tab').focus();}});
+    $('#search').addEventListener('input',e=>{state.query=e.target.value;state.scope='all';state.category='';$('#detail').classList.remove('mobile-open');render();});
+    $('#search-mode').addEventListener('change',e=>{state.mode=e.target.value;$('#search-demo').hidden=state.mode!=='description';renderNotes();});
+    for(const [id,key] of [['platform-filter','platform'],['usage-filter','usage'],['category-filter','category'],['group-by','group'],['date-from','from'],['date-to','to']]) $('#'+id).addEventListener('change',e=>{state[key]=e.target.value;$('#detail').classList.remove('mobile-open');$('#date-error').hidden=!(state.from&&state.to&&state.from>state.to);$('#date-error').textContent='Tanggal akhir harus sama atau setelah tanggal awal.';render();});
+    $('#toggle-dates').addEventListener('click',()=>{const opened=$('#date-range').hidden;$('#date-range').hidden=!opened;$('#toggle-dates').setAttribute('aria-expanded',String(opened));});
+    $('#clear-filters').addEventListener('click',resetFilters);
+    $('#add-category').addEventListener('click',()=>{$('#category-list').innerHTML=data.categories.map(c=>`<span class="tag">${escapeHTML(c)}</span>`).join('');$('#category-error').hidden=true;$('#new-category').value='';showDialog('#category-dialog');});
+    $('#category-form').addEventListener('submit',e=>{e.preventDefault();const name=$('#new-category').value.trim();if(!name||data.categories.some(c=>c.toLowerCase()===name.toLowerCase())){$('#category-error').textContent=name?'Kategori sudah ada.':'Isi nama kategori.';$('#category-error').hidden=false;return;}data.categories.push(name);persist();renderNavigation();$('#category-list').insertAdjacentHTML('beforeend',`<span class="tag">${escapeHTML(name)}</span>`);$('#new-category').value='';$('#category-error').hidden=true;$('#new-category').focus();toast('Kategori ditambahkan');});
+    $('#confirm-action').addEventListener('click',()=>{const cb=confirmCallback;closeDialog('#confirm-dialog');confirmCallback=null;if(cb)cb();});
+    $('#reset-data').addEventListener('click',()=>confirmAction('Reset data contoh?','Perubahan di prototype ini akan diganti dengan data awal.','Reset',()=>{data=seedData();state.selected='sample-motion';state.scope='all';resetFilters();persist();$('#detail').classList.remove('mobile-open');render();toast('Data contoh dikembalikan');}));
+    document.querySelectorAll('[data-close]').forEach(b=>{if(b.classList.contains('icon-button')) b.innerHTML=icon('close');b.addEventListener('click',()=>closeDialog('#'+b.dataset.close));});
+    document.querySelectorAll('dialog').forEach(d=>d.addEventListener('cancel',e=>{e.preventDefault();closeDialog('#'+d.id);}));
+    $('#mobile-menu').addEventListener('click',()=>{opener=$('#mobile-menu');$('#sidebar').inert=false;$('#sidebar').classList.add('open');$('#sidebar-shade').hidden=false;$('#mobile-menu').setAttribute('aria-expanded','true');$('#main-nav button').focus();});
+    $('#sidebar-shade').addEventListener('click',()=>{closeMenu();$('#mobile-menu').focus();});
+    $('#sidebar').addEventListener('keydown',e=>{if(!$('#sidebar').classList.contains('open'))return;const controls=[...$('#sidebar').querySelectorAll('button')];if(e.key==='Tab'){if(e.shiftKey&&document.activeElement===controls[0]){e.preventDefault();controls.at(-1).focus();}else if(!e.shiftKey&&document.activeElement===controls.at(-1)){e.preventDefault();controls[0].focus();}}});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#sidebar').classList.contains('open')){closeMenu();$('#mobile-menu').focus();}if(document.querySelector('dialog[open]'))return;if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus();}});
+    const mobileQuery=matchMedia('(max-width:690px)');
+    mobileQuery.addEventListener('change',()=>{closeMenu();$('#sidebar').inert=mobileQuery.matches;});
+    $('#sidebar').inert=mobileQuery.matches;
+    $('#platform-filter').innerHTML='<option value="">Semua platform</option>'+platforms.map(p=>`<option>${p}</option>`).join('');
+    $('#note-platform').innerHTML='<option value="auto">Otomatis dari link</option>'+platforms.map(p=>`<option>${p}</option>`).join('');
+    $('#new-note').innerHTML=icon('plus')+'Tambah catatan';$('#add-category').innerHTML=icon('plus');$('#toggle-dates').innerHTML=icon('calendar');$('#mobile-menu').innerHTML=icon('menu');$('#search-icon').outerHTML=icon('search');
+    $('#storage-status').textContent=storageAvailable?'Tersimpan di browser ini':'Hanya tersimpan di sesi ini';
+    render();
+  </script>
+</body>
+</html>
