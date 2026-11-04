@@ -3,7 +3,7 @@ import { api } from './api'
 import { MarkdownContent } from './components/MarkdownContent'
 import { BuiltinIcon } from './components/BuiltinIcon'
 import { IconPicker, NoteIcon } from './components/ItemIcons'
-import type { CollectionLayout, CollectionTab, CollectionView, Folder, IconAsset, Note, NoteInput, NoteUsage } from './types'
+import type { CollectionLayout, CollectionTab, CollectionView, Folder, IconAsset, Note, NoteInput, NoteUsage, Tag } from './types'
 import './App.css'
 
 const usageLabels: Record<NoteUsage, string> = { try: 'Ingin dicoba', active: 'Aktif digunakan', reference: 'Referensi' }
@@ -15,6 +15,47 @@ const tabOptions: { id: CollectionTab; label: string }[] = [
 
 type EditorState = { mode: 'new'; folderId: string | null } | { mode: 'edit'; note: Note } | { mode: 'detail'; note: Note } | null
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }> }
+type SortMode = 'name-asc' | 'name-desc' | 'modified-desc' | 'modified-asc' | 'created-desc' | 'created-asc'
+type GroupMode = 'none' | 'tag'
+
+const sortOptions: { id: SortMode; label: string }[] = [
+  { id: 'name-asc', label: 'Nama A–Z' }, { id: 'name-desc', label: 'Nama Z–A' },
+  { id: 'modified-desc', label: 'Diubah terbaru' }, { id: 'modified-asc', label: 'Diubah terlama' },
+  { id: 'created-desc', label: 'Dibuat terbaru' }, { id: 'created-asc', label: 'Dibuat terlama' },
+]
+const nameCollator = new Intl.Collator('id', { sensitivity: 'base', numeric: true })
+
+function readSortPreference(key: string, fallback: SortMode): SortMode {
+  const saved = localStorage.getItem(key)
+  return sortOptions.some((option) => option.id === saved) ? saved as SortMode : fallback
+}
+
+function compareSortDates(a: string, b: string, mode: SortMode) {
+  const descending = mode.endsWith('desc')
+  const difference = new Date(a).getTime() - new Date(b).getTime()
+  return (descending ? -1 : 1) * (Number.isFinite(difference) ? difference : 0)
+}
+
+function sortFolderList(folders: Folder[], mode: SortMode) {
+  return [...folders].sort((a, b) => {
+    if (a.is_system !== b.is_system) return b.is_system - a.is_system
+    if (a.is_pinned !== b.is_pinned) return b.is_pinned - a.is_pinned
+    const order = mode.startsWith('name-')
+      ? (mode === 'name-asc' ? 1 : -1) * nameCollator.compare(a.name, b.name)
+      : compareSortDates(a[mode.startsWith('modified') ? 'updated_at' : 'created_at'], b[mode.startsWith('modified') ? 'updated_at' : 'created_at'], mode)
+    return order || nameCollator.compare(a.name, b.name) || a.id.localeCompare(b.id)
+  })
+}
+
+function sortNoteList(notes: Note[], mode: SortMode) {
+  return [...notes].sort((a, b) => {
+    if (a.is_pinned !== b.is_pinned) return b.is_pinned - a.is_pinned
+    const order = mode.startsWith('name-')
+      ? (mode === 'name-asc' ? 1 : -1) * nameCollator.compare(a.title, b.title)
+      : compareSortDates(a[mode.startsWith('modified') ? 'updated_at' : 'created_at'], b[mode.startsWith('modified') ? 'updated_at' : 'created_at'], mode)
+    return order || nameCollator.compare(a.title, b.title) || a.id.localeCompare(b.id)
+  })
+}
 
 function readAppRoute() {
   const segments = window.location.pathname.split('/').filter(Boolean)
@@ -47,7 +88,7 @@ function pushHistoryEntry(url: URL, state: Record<string, unknown>, scrollY = wi
   window.history.pushState({ ...currentState, ...state, devpocketScrollY: scrollY }, '', url)
 }
 
-function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | 'list' | 'columns' | 'plus' | 'search' | 'filter' | 'close' | 'back' | 'external' | 'edit' | 'trash' | 'sparkles' | 'install' | 'star' | 'more'; size?: number; filled?: boolean }) {
+function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | 'list' | 'columns' | 'plus' | 'search' | 'filter' | 'close' | 'back' | 'external' | 'edit' | 'trash' | 'sparkles' | 'install' | 'star' | 'more' | 'tag'; size?: number; filled?: boolean }) {
   const paths: Record<string, ReactNode> = {
     folder: <><path d="M3 6.5h6l2 2h10v10.8H3z"/><path d="M3 9h18"/></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
@@ -65,6 +106,7 @@ function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | '
     install: <><path d="M12 3v11m0 0 4-4m-4 4-4-4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></>,
     star: <path d="m12 3 2.75 5.58 6.16.9-4.45 4.34 1.05 6.13L12 17.06l-5.51 2.9 1.05-6.14L3.1 9.48l6.15-.9L12 3Z"/>,
     more: <><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></>,
+    tag: <><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.2"/></>,
   }
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
@@ -135,11 +177,15 @@ function FolderWatermark({ folder }: { folder: Folder }) {
 function App() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [notes, setNotes] = useState<Note[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [iconAssets, setIconAssets] = useState<IconAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [view, setView] = useState<CollectionView>(() => localStorage.getItem('devpocket-view') === 'items' ? 'items' : 'folders')
   const [layout, setLayout] = useState<CollectionLayout>(() => localStorage.getItem('devpocket-layout') === 'compare' ? 'compare' : 'standard')
+  const [folderSort, setFolderSort] = useState<SortMode>(() => readSortPreference('devpocket-folder-sort', 'name-asc'))
+  const [itemSort, setItemSort] = useState<SortMode>(() => readSortPreference('devpocket-item-sort', 'created-desc'))
+  const [groupMode, setGroupMode] = useState<GroupMode>(() => localStorage.getItem('devpocket-group') === 'tag' ? 'tag' : 'none')
   const [tab, setTab] = useState<CollectionTab>(() => (tabOptions.some((x) => x.id === localStorage.getItem('devpocket-tab')) ? localStorage.getItem('devpocket-tab') as CollectionTab : 'all'))
   const [openFolder, setOpenFolder] = useState<string | null>(() => readAppRoute().folderId)
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(() => readAppRoute().noteId)
@@ -155,6 +201,11 @@ function App() {
   const [folderIconAssetId, setFolderIconAssetId] = useState('')
   const [folderIconUrl, setFolderIconUrl] = useState('')
   const [noteMoveMenu, setNoteMoveMenu] = useState<{ note: Note; x: number; y: number } | null>(null)
+  const [noteMenuId, setNoteMenuId] = useState<string | null>(null)
+  const [tagEditorNote, setTagEditorNote] = useState<Note | null>(null)
+  const [tagDraft, setTagDraft] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
+  const [tagBusy, setTagBusy] = useState(false)
   const [movingNoteId, setMovingNoteId] = useState<string | null>(null)
   const [folderMenuId, setFolderMenuId] = useState<string | null>(null)
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null)
@@ -186,8 +237,8 @@ function App() {
   const refresh = async () => {
     setError('')
     try {
-      const [nextFolders, nextNotes, aiStatus, nextIcons] = await Promise.all([api.getFolders(), api.getNotes(), api.getAiStatus(), api.getIcons()])
-      setFolders(nextFolders); setNotes(nextNotes); setIconAssets(nextIcons)
+      const [nextFolders, nextNotes, aiStatus, nextIcons, nextTags] = await Promise.all([api.getFolders(), api.getNotes(), api.getAiStatus(), api.getIcons(), api.getTags()])
+      setFolders(nextFolders); setNotes(nextNotes); setIconAssets(nextIcons); setTags(nextTags)
       setAiConfigured(aiStatus.configured)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Gagal memuat catatan.')
@@ -215,6 +266,9 @@ function App() {
   }, [])
   useEffect(() => { localStorage.setItem('devpocket-view', view) }, [view])
   useEffect(() => { localStorage.setItem('devpocket-layout', layout) }, [layout])
+  useEffect(() => { localStorage.setItem('devpocket-folder-sort', folderSort) }, [folderSort])
+  useEffect(() => { localStorage.setItem('devpocket-item-sort', itemSort) }, [itemSort])
+  useEffect(() => { localStorage.setItem('devpocket-group', groupMode) }, [groupMode])
   useEffect(() => { localStorage.setItem('devpocket-tab', tab) }, [tab])
   useEffect(() => {
     const previousScrollRestoration = window.history.scrollRestoration
@@ -287,6 +341,19 @@ function App() {
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [noteMoveMenu])
+  useEffect(() => {
+    if (!noteMenuId) return
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest('[data-note-menu]')) setNoteMenuId(null)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNoteMenuId(null) }
+    window.addEventListener('pointerdown', dismiss)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('pointerdown', dismiss)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [noteMenuId])
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(''), 2200); return () => clearTimeout(id) }, [toast])
   useEffect(() => {
     const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); document.querySelector<HTMLInputElement>('#global-search')?.focus() } }
@@ -342,7 +409,7 @@ function App() {
   }, [folders, notes])
   const filtered = useMemo(() => notes.filter((note) => {
     const needle = query.trim().toLocaleLowerCase()
-    const matchesText = aiResults ? aiResults.includes(note.id) : !needle || [note.title, note.content, note.source_url ?? '', note.platform, note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name ?? '' : ''].some((v) => v.toLocaleLowerCase().includes(needle))
+    const matchesText = aiResults ? aiResults.includes(note.id) : !needle || [note.title, note.content, note.source_url ?? '', note.platform, note.tags.join(' '), note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name ?? '' : ''].some((v) => v.toLocaleLowerCase().includes(needle))
     const matchesFolder = !folderFilter || Boolean(note.folder_id && folderSubtrees.get(note.folder_id)?.has(folderFilter))
     const cutoff = dateFilter ? Date.now() - Number(dateFilter) * 24 * 60 * 60 * 1000 : 0
     const matchesDate = !cutoff || new Date(note.created_at).getTime() >= cutoff
@@ -350,17 +417,15 @@ function App() {
   }), [notes, query, platformFilter, folderFilter, dateFilter, aiResults, folderPaths, folderSubtrees])
   const platforms = useMemo(() => [...new Set(notes.map((note) => note.platform))].sort(), [notes])
   const currentFolder = folders.find((folder) => folder.id === openFolder)
-  const folderOrder = (a: Folder, b: Folder) => Number(b.is_system) - Number(a.is_system) || b.is_pinned - a.is_pinned || a.name.localeCompare(b.name, 'id')
-  const folderChildren = (openFolder === null ? folders.filter((folder) => folder.parent_id === null) : currentFolder ? folders.filter((folder) => folder.parent_id === currentFolder.id) : []).sort(folderOrder)
+  const folderChildren = sortFolderList(openFolder === null ? folders.filter((folder) => folder.parent_id === null) : currentFolder ? folders.filter((folder) => folder.parent_id === currentFolder.id) : [], folderSort)
   const currentPath: Folder[] = []
   if (currentFolder) {
     const byId = new Map(folders.map((folder) => [folder.id, folder]))
     let parent: Folder | undefined = currentFolder
     while (parent) { currentPath.unshift(parent); parent = parent.parent_id ? byId.get(parent.parent_id) : undefined }
   }
-  const folderNotes = (openFolder ? filtered.filter((note) => note.folder_id === openFolder) : filtered)
-    .sort((a, b) => b.is_pinned - a.is_pinned)
-  const activeItems = filtered.filter((note) => tab === 'all' || (tab === 'draft' ? note.status === 'draft' : note.status === 'collection' && note.usage === tab)).sort((a, b) => b.is_pinned - a.is_pinned)
+  const folderNotes = sortNoteList(openFolder ? filtered.filter((note) => note.folder_id === openFolder) : filtered, itemSort)
+  const activeItems = sortNoteList(filtered.filter((note) => tab === 'all' || (tab === 'draft' ? note.status === 'draft' : note.status === 'collection' && note.usage === tab)), itemSort)
 
   function navigateToFolder(folderId: string | null) {
     const url = new URL(window.location.href)
@@ -419,6 +484,36 @@ function App() {
     setEditorFolderId(note.folder_id ?? draftFolderId)
     setEditor({ mode: 'edit', note })
     window.requestAnimationFrame(() => titleInput.current?.focus({ preventScroll: true }))
+  }
+  function openTagEditor(note: Note) {
+    setNoteMenuId(null)
+    setError('')
+    setTagDraft([...note.tags])
+    setTagInput('')
+    setTagEditorNote(note)
+  }
+  function addTagDraft(rawName = tagInput) {
+    const name = rawName.normalize('NFC').trim()
+    if (!name) return
+    if (name.length > 40) { setError('Nama tag maksimal 40 karakter.'); return }
+    if (tagDraft.some((tag) => tag.toLowerCase() === name.toLowerCase())) { setTagInput(''); return }
+    if (tagDraft.length >= 20) { setError('Maksimal 20 tag per item.'); return }
+    setError('')
+    setTagDraft((current) => [...current, name])
+    setTagInput('')
+  }
+  async function saveNoteTags(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!tagEditorNote) return
+    setTagBusy(true)
+    setError('')
+    try {
+      await api.updateNoteTags(tagEditorNote.id, tagDraft)
+      setTagEditorNote(null)
+      setToast('Tag disimpan')
+      await refresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menyimpan tag.') }
+    finally { setTagBusy(false) }
   }
   async function toggleNotePinned(note: Note) {
     const pinned = !note.is_pinned
@@ -606,13 +701,25 @@ function App() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal memindahkan catatan.') }
   }
 
+  function NoteMenu({ note }: { note: Note }) {
+    return <div className="note-menu-wrap" data-note-menu>
+      <button className="note-menu-trigger" type="button" aria-label={`Menu ${note.title}`} aria-expanded={noteMenuId === note.id} title={`Menu ${note.title}`} onClick={() => setNoteMenuId((current) => current === note.id ? null : note.id)}><Icon name="more" size={18} /></button>
+      {noteMenuId === note.id && <div className="note-card-menu">
+        <button type="button" onClick={() => { setNoteMenuId(null); editNote(note) }}><Icon name="edit" size={15} />Edit catatan</button>
+        <button type="button" onClick={() => openTagEditor(note)}><Icon name="tag" size={15} />{note.tags.length ? 'Kelola tag' : 'Tambah tag'}</button>
+      </div>}
+    </div>
+  }
+
   function NoteCard({ note, showFolder = false }: { note: Note; showFolder?: boolean }) {
-    return <article className="note-card" onContextMenu={(event) => showNoteMoveMenu(note, event)}>
+    return <article className={`note-card${noteMenuId === note.id ? ' has-menu' : ''}`} onContextMenu={(event) => showNoteMoveMenu(note, event)}>
+      <NoteMenu note={note} />
       <button className="note-card-main" onClick={() => openNoteModal(note)}>
         <span className="note-meta"><i className={`platform-dot dot-${note.platform.toLowerCase().replace(/[^a-z]/g, '')}`} />{note.platform}<span>·</span>{formatDate(note.created_at)}</span>
         <span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={30} />}<strong>{note.title}</strong></span>
         {showFolder && <span className="note-folder"><Icon name="folder" size={14} />{note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name : note.folder_name}</span>}
         {note.content && <span className="note-excerpt">{note.content.replace(/[#*`>\[\]]/g, '').replace(/\s+/g, ' ').slice(0, 140)}</span>}
+        {note.tags.length > 0 && <span className="note-tags">{note.tags.slice(0, 3).map((tag) => <span className="note-tag" key={tag}>{tag}</span>)}{note.tags.length > 3 && <span className="note-tag note-tag-more">+{note.tags.length - 3}</span>}</span>}
       </button>
       <span className="note-footer">{note.usage && <span className={`usage-tag usage-${note.usage}`}>{usageLabels[note.usage]}</span>}<button className={`pin-button${note.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleNotePinned(note)} aria-label={note.is_pinned ? 'Lepas sematan item' : 'Sematkan item'} title={note.is_pinned ? 'Lepas sematan' : 'Sematkan'}><Icon name="star" size={17} filled={Boolean(note.is_pinned)} /></button></span>
     </article>
@@ -628,9 +735,9 @@ function App() {
   }
 
   function CompareCard({ note }: { note: Note }) {
-    return <article className="compare-card" draggable onContextMenu={(event) => showNoteMoveMenu(note, event)} onDragStart={(event) => { setDragId(note.id); event.dataTransfer.setData('text/plain', note.id) }} onDragEnd={() => setDragId(null)}>
-      <button className="compare-main" onClick={() => openNoteModal(note)}><span className="note-meta">{note.platform} · {formatDate(note.created_at)}</span><span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={28} />}<strong>{note.title}</strong></span><span className="note-folder"><Icon name="folder" size={14} />{note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name : note.folder_name}</span></button>
-      <div className="compare-card-actions"><button className={`pin-button${note.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleNotePinned(note)} aria-label={note.is_pinned ? 'Lepas sematan item' : 'Sematkan item'} title={note.is_pinned ? 'Lepas sematan' : 'Sematkan'}><Icon name="star" size={17} filled={Boolean(note.is_pinned)} /></button><span className="drag-mark" aria-hidden="true">⠿</span></div>
+    return <article className={`compare-card${noteMenuId === note.id ? ' has-menu' : ''}`} draggable onContextMenu={(event) => showNoteMoveMenu(note, event)} onDragStart={(event) => { setDragId(note.id); event.dataTransfer.setData('text/plain', note.id) }} onDragEnd={() => setDragId(null)}>
+      <button className="compare-main" onClick={() => openNoteModal(note)}><span className="note-meta">{note.platform} · {formatDate(note.created_at)}</span><span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={28} />}<strong>{note.title}</strong></span><span className="note-folder"><Icon name="folder" size={14} />{note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name : note.folder_name}</span>{note.tags.length > 0 && <span className="note-tags">{note.tags.slice(0, 3).map((tag) => <span className="note-tag" key={tag}>{tag}</span>)}{note.tags.length > 3 && <span className="note-tag note-tag-more">+{note.tags.length - 3}</span>}</span>}</button>
+      <div className="compare-card-actions"><button className={`pin-button${note.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleNotePinned(note)} aria-label={note.is_pinned ? 'Lepas sematan item' : 'Sematkan item'} title={note.is_pinned ? 'Lepas sematan' : 'Sematkan'}><Icon name="star" size={17} filled={Boolean(note.is_pinned)} /></button><NoteMenu note={note} /><span className="drag-mark" aria-hidden="true">⠿</span></div>
     </article>
   }
 
@@ -641,6 +748,27 @@ function App() {
     })}</div>
   }
 
+  function SortSelect({ value, onChange, label }: { value: SortMode; onChange: (value: SortMode) => void; label: string }) {
+    return <label className="sort-control"><span className="sr-only">{label}</span><select className="toolbar-select" aria-label={label} value={value} onChange={(event) => onChange(event.target.value as SortMode)}>{sortOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
+  }
+
+  function GroupSelect() {
+    return <label className="sort-control"><span className="sr-only">Kelompokkan item</span><select className="toolbar-select" aria-label="Kelompokkan item" value={groupMode} onChange={(event) => setGroupMode(event.target.value as GroupMode)}><option value="none">Tanpa grup</option><option value="tag">Kelompokkan: Tag</option></select></label>
+  }
+
+  function renderNoteGrid(items: Note[], showFolder: boolean) {
+    if (groupMode !== 'tag') return <div className="items-grid">{items.map((note) => <NoteCard key={note.id} note={note} showFolder={showFolder} />)}</div>
+    const untaggedKey = '\u0000untagged'
+    const grouped = new Map<string, Note[]>()
+    for (const note of items) {
+      const labels = note.tags.length ? [...new Set(note.tags)] : [untaggedKey]
+      for (const label of labels) grouped.set(label, [...(grouped.get(label) ?? []), note])
+    }
+    const groups = [...grouped.entries()].sort(([a], [b]) => a === untaggedKey ? 1 : b === untaggedKey ? -1 : nameCollator.compare(a, b))
+    if (!groups.length) return <div className="items-grid" />
+    return <div className="tag-groups">{groups.map(([name, groupItems]) => <section className="tag-group" key={name}><header><h2>{name === untaggedKey ? 'Tanpa tag' : name}</h2><span>{groupItems.length} item</span></header><div className="items-grid">{groupItems.map((note) => <NoteCard key={note.id} note={note} showFolder={showFolder} />)}</div></section>)}</div>
+  }
+
   const pageTitle = currentFolder?.name ?? 'Koleksi'
 
   return <div className="app-shell">
@@ -648,22 +776,22 @@ function App() {
     <main className="workspace">
       <div className="search-row"><div className={`search-box${aiSearchMode ? ' ai-search-box' : ''}`}><Icon name="search" /><input id="global-search" aria-label="Cari catatan" value={query} onChange={(event) => { setQuery(event.target.value); setAiResults(null) }} onKeyDown={(event) => { if (event.key === 'Enter' && aiSearchMode) void runAiSearch() }} placeholder={aiSearchMode ? (aiConfigured ? 'Jelaskan yang kamu ingat...' : 'Gemini belum disiapkan') : 'Cari catatan...'} /><button className={`search-mode${aiSearchMode ? ' active' : ''}`} type="button" aria-pressed={aiSearchMode} onClick={() => { setAiSearchMode(!aiSearchMode); setAiResults(null) }} title="Ganti pencarian kata atau AI">{aiSearchMode ? 'AI' : 'Kata'}</button>{aiSearchMode ? <button className="search-submit" type="button" onClick={() => void runAiSearch()} disabled={!aiConfigured || aiSearching} aria-label="Cari dengan AI" title={aiConfigured ? 'Cari dengan AI' : 'Gemini belum disiapkan'}>{aiSearching ? '…' : <Icon name="sparkles" size={16} />}</button> : <kbd>Ctrl K</kbd>}</div><div className="filter-holder"><button className={`icon-button filter-button${filterOpen ? ' pressed' : ''}`} aria-label="Filter" aria-expanded={filterOpen} onClick={() => setFilterOpen(!filterOpen)}><Icon name="filter" />{(platformFilter || folderFilter || dateFilter) && <i className="filter-dot" />}</button>{filterOpen && <div className="filter-pop"><label htmlFor="platform-filter">Platform</label><select id="platform-filter" value={platformFilter} onChange={(event) => setPlatformFilter(event.target.value)}><option value="">Semua platform</option>{platforms.map((platform) => <option key={platform}>{platform}</option>)}</select><label htmlFor="folder-filter">Folder</label><select id="folder-filter" value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)}><option value="">Semua folder</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select><label htmlFor="date-filter">Tanggal ditambahkan</label><select id="date-filter" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}><option value="">Kapan saja</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option></select><button className="link-button" onClick={() => { setPlatformFilter(''); setFolderFilter(''); setDateFilter(''); setFilterOpen(false) }}>Hapus filter</button></div>}</div></div>
 
-      {error && !editor && !folderModal && !editingFolder && !folderToDelete && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')} aria-label="Tutup pesan">×</button></div>}
+      {error && !editor && !folderModal && !editingFolder && !folderToDelete && !tagEditorNote && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')} aria-label="Tutup pesan">×</button></div>}
 
       {openFolder && <nav className="breadcrumbs" aria-label="Lokasi"><button onClick={() => navigateToFolder(null)}>Koleksi</button><span>/</span>{currentPath.map((folder, index) => <span className="breadcrumb-part" key={folder.id}>{index > 0 && <span>/</span>}{index === currentPath.length - 1 ? <span aria-current="page">{folder.name}</span> : <button onClick={() => navigateToFolder(folder.id)}>{folder.name}</button>}</span>)}</nav>}
 
       <section className="section-head"><h1>{pageTitle}</h1><span className="count-label">{openFolder ? folderItemCounts.get(openFolder) ?? folderNotes.length : filtered.length} item</span></section>
 
-      {!openFolder && <div className="view-tools"><div className="segmented" role="group" aria-label="Tampilan koleksi"><button className={view === 'folders' ? 'selected' : ''} aria-pressed={view === 'folders'} onClick={() => setView('folders')} title="Folder"><Icon name="folder" /></button><button className={view === 'items' ? 'selected' : ''} aria-pressed={view === 'items'} onClick={() => setView('items')} title="Semua item"><Icon name="grid" /></button></div>{view === 'folders' && <button className="button" onClick={() => startCreateFolder('')}><Icon name="plus" />Tambah folder</button>}{view === 'items' && <div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew()} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div>}</div>}
+      {!openFolder && <div className="view-tools"><div className="segmented" role="group" aria-label="Tampilan koleksi"><button className={view === 'folders' ? 'selected' : ''} aria-pressed={view === 'folders'} onClick={() => setView('folders')} title="Folder"><Icon name="folder" /></button><button className={view === 'items' ? 'selected' : ''} aria-pressed={view === 'items'} onClick={() => setView('items')} title="Semua item"><Icon name="grid" /></button></div>{view === 'folders' && <div className="collection-controls"><SortSelect value={folderSort} onChange={setFolderSort} label="Urutkan folder" /><button className="button" onClick={() => startCreateFolder('')}><Icon name="plus" />Tambah folder</button></div>}{view === 'items' && <div className="collection-controls"><SortSelect value={itemSort} onChange={setItemSort} label="Urutkan item" />{layout === 'standard' && <GroupSelect />}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew()} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div>}</div>}
 
-      {openFolder && <div className="folder-view-tools">{currentFolder && <button className="button" onClick={() => startCreateFolder(currentFolder.id)}><Icon name="plus" />Tambah subfolder</button>}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew(currentFolder?.id ?? null)} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div>}
+      {openFolder && <div className="folder-view-tools">{currentFolder && <button className="button" onClick={() => startCreateFolder(currentFolder.id)}><Icon name="plus" />Tambah subfolder</button>}<div className="collection-controls"><SortSelect value={folderSort} onChange={setFolderSort} label="Urutkan folder" /><SortSelect value={itemSort} onChange={setItemSort} label="Urutkan item" />{layout === 'standard' && <GroupSelect />}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew(currentFolder?.id ?? null)} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div></div>}
 
       {loading ? <p className="empty-state">Memuat...</p> : openFolder ? <div className="folder-page">
         {folderChildren.length > 0 && <div className="folder-grid">{folderChildren.map((folder) => <FolderCard key={folder.id} folder={folder} />)}</div>}
-        {layout === 'standard' ? <div className="items-grid">{folderNotes.map((note) => <NoteCard key={note.id} note={note} />)}{!folderChildren.length && !folderNotes.length && <p className="empty-state">Folder ini masih kosong</p>}</div> : <>{!folderNotes.length && <p className="empty-state">Belum ada item</p>}<CompareBoard items={folderNotes} /></>}
+        {layout === 'standard' ? <>{renderNoteGrid(folderNotes, false)}{!folderChildren.length && !folderNotes.length && <p className="empty-state">Folder ini masih kosong</p>}</> : <>{!folderNotes.length && <p className="empty-state">Belum ada item</p>}<CompareBoard items={folderNotes} /></>}
       </div> : view === 'folders' ? <div className="folder-grid">
         {folderChildren.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
-      </div> : layout === 'standard' ? <><div ref={tabsSentinel} className="sticky-sentinel" aria-hidden="true" /><div className={`sticky-tabs${tabsStuck ? ' is-stuck' : ''}`}><nav className="status-tabs" aria-label="Filter status">{tabOptions.map((option) => <button key={option.id} className={tab === option.id ? 'active' : ''} aria-pressed={tab === option.id} onClick={() => setTab(option.id)}>{option.label}</button>)}</nav>{tabsStuck && <button className="button primary sticky-add" onClick={() => openNew()}><Icon name="plus" /><span>Tambah catatan</span></button>}</div><div className="items-grid">{activeItems.map((note) => <NoteCard key={note.id} note={note} showFolder />)}{!activeItems.length && <p className="empty-state">{aiResults ? 'Tidak ada catatan yang mirip' : query ? 'Tidak ada yang cocok' : 'Belum ada catatan'}</p>}</div></> : <CompareBoard items={filtered} />}
+      </div> : layout === 'standard' ? <><div ref={tabsSentinel} className="sticky-sentinel" aria-hidden="true" /><div className={`sticky-tabs${tabsStuck ? ' is-stuck' : ''}`}><nav className="status-tabs" aria-label="Filter status">{tabOptions.map((option) => <button key={option.id} className={tab === option.id ? 'active' : ''} aria-pressed={tab === option.id} onClick={() => setTab(option.id)}>{option.label}</button>)}</nav>{tabsStuck && <button className="button primary sticky-add" onClick={() => openNew()}><Icon name="plus" /><span>Tambah catatan</span></button>}</div>{renderNoteGrid(activeItems, true)}{!activeItems.length && <p className="empty-state">{aiResults ? 'Tidak ada catatan yang mirip' : query ? 'Tidak ada yang cocok' : 'Belum ada catatan'}</p>}</> : <CompareBoard items={sortNoteList(filtered, itemSort)} />}
     </main>
 
     {folderModal && <Modal title={folderModalParentId ? 'Tambah subfolder' : 'Tambah folder'} initialFocusSelector="input[name=name]" onClose={() => setFolderModal(false)}><form className="form-body" onSubmit={(event) => void createFolder(event)}><label>Nama folder<input name="name" maxLength={60} required placeholder="Misalnya: Tools" /></label><label>Folder induk<select name="parentFolderId" value={folderModalParentId} onChange={(event) => setFolderModalParentId(event.target.value)}><option value="">Koleksi</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select></label><IconPicker iconName={folderIconName} iconAssetId={folderIconAssetId} iconUrl={folderIconUrl} assets={iconAssets} onSelect={selectFolderBuiltinIcon} onSelectUrl={selectFolderIconUrl} onUpload={uploadFolderIcon} onDelete={(asset) => void deleteIcon(asset)} clearLabel="Hapus ikon dari folder" />{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" onClick={() => setFolderModal(false)}>Batal</button><button className="button primary" type="submit">Simpan</button></footer></form></Modal>}
@@ -671,6 +799,13 @@ function App() {
     {editingFolder && <Modal title="Edit folder" initialFocusSelector="input[name=name]" onClose={() => { if (!folderActionBusy) setEditingFolder(null) }}><form className="form-body" onSubmit={(event) => void saveFolderName(event)}><label>Nama folder<input name="name" value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} maxLength={60} required /></label><IconPicker iconName={folderIconName} iconAssetId={folderIconAssetId} iconUrl={folderIconUrl} assets={iconAssets} onSelect={selectFolderBuiltinIcon} onSelectUrl={selectFolderIconUrl} onUpload={uploadFolderIcon} onDelete={(asset) => void deleteIcon(asset)} clearLabel="Hapus ikon dari folder" />{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setEditingFolder(null)}>Batal</button><button className="button primary" type="submit" disabled={folderActionBusy}>{folderActionBusy ? 'Menyimpan…' : 'Simpan'}</button></footer></form></Modal>}
 
     {folderToDelete && <Modal title="Hapus folder" onClose={() => { if (!folderActionBusy) setFolderToDelete(null) }}><div className="delete-folder-dialog"><div><strong>Hapus “{folderToDelete.name}”?</strong><p>Pilih apa yang dilakukan dengan item dan subfolder di dalamnya.</p></div>{error && <p className="modal-error" role="alert">{error}</p>}<div className="delete-folder-options"><button className="button" type="button" disabled={folderActionBusy} onClick={() => void deleteFolderContents('draft')}><span><strong>Pindahkan ke Draft</strong><small>Item dan subfolder tetap tersimpan di Draft.</small></span></button><button className="button danger" type="button" disabled={folderActionBusy} onClick={() => void deleteFolderContents('delete')}><span><strong>{folderActionBusy ? 'Menghapus…' : 'Hapus semua'}</strong><small>Folder, subfolder, dan semua item dihapus permanen.</small></span></button></div><footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setFolderToDelete(null)}>Batal</button></footer></div></Modal>}
+
+    {tagEditorNote && <Modal title={`Tag · ${tagEditorNote.title}`} initialFocusSelector="input[name=tagName]" onClose={() => { if (!tagBusy) setTagEditorNote(null) }}><form className="form-body tag-manager" onSubmit={(event) => void saveNoteTags(event)}>
+      <label>Tambah tag<div className="tag-add-row"><input name="tagName" value={tagInput} maxLength={40} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addTagDraft() } }} placeholder="Misalnya: React" /><button className="button" type="button" onClick={() => addTagDraft()} disabled={!tagInput.trim()}><Icon name="plus" />Tambah</button></div></label>
+      {tagDraft.length > 0 && <div className="tag-manager-section"><span className="field-label">Tag item ini</span><div className="tag-choice-list">{tagDraft.map((tag) => <button className="tag-choice selected" type="button" key={tag} onClick={() => setTagDraft((current) => current.filter((value) => value !== tag))} aria-label={`Hapus tag ${tag}`} title={`Hapus tag ${tag}`}><span>{tag}</span><Icon name="close" size={14} /></button>)}</div></div>}
+      {tags.some((tag) => !tagDraft.some((current) => current.toLowerCase() === tag.name.toLowerCase())) && <div className="tag-manager-section"><span className="field-label">Tag tersimpan</span><div className="tag-choice-list">{tags.filter((tag) => !tagDraft.some((current) => current.toLowerCase() === tag.name.toLowerCase())).map((tag) => <button className="tag-choice" type="button" key={tag.id} onClick={() => addTagDraft(tag.name)}><span>{tag.name}</span></button>)}</div></div>}
+      {error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" disabled={tagBusy} onClick={() => setTagEditorNote(null)}>Batal</button><button className="button primary" type="submit" disabled={tagBusy}>{tagBusy ? 'Menyimpan…' : 'Simpan'}</button></footer>
+    </form></Modal>}
 
     {(editor?.mode === 'new' || editor?.mode === 'edit') && <Modal title={editor.mode === 'edit' ? 'Edit catatan' : 'Tambah catatan'} initialFocusSelector="input[name=title]" onClose={() => editor.mode === 'edit' ? closeNoteModal() : setEditor(null)} wide><form className="form-body note-form" onSubmit={(event) => void saveNote(event)}>
       <label>Judul<input ref={titleInput} name="title" required maxLength={120} defaultValue={editor.mode === 'edit' ? editor.note.title : ''} placeholder="Judul catatan" /></label>

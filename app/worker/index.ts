@@ -17,10 +17,12 @@ type NoteRow = {
   icon_asset_id: string | null
   icon_url: string | null
   is_pinned: number
+  tags: string[]
   created_at: string
   updated_at: string
 }
-type FolderRow = { id: string; name: string; parent_id: string | null; item_count: number; child_count: number; is_pinned: number; is_system: number; icon_name: string | null; icon_asset_id: string | null; icon_url: string | null; created_at: string }
+type NoteDbRow = Omit<NoteRow, 'tags'> & { tags_json: string }
+type FolderRow = { id: string; name: string; parent_id: string | null; item_count: number; child_count: number; is_pinned: number; is_system: number; icon_name: string | null; icon_asset_id: string | null; icon_url: string | null; created_at: string; updated_at: string }
 type FolderIconInput = { iconName?: unknown; iconAssetId?: unknown; iconUrl?: unknown }
 type IconAssetRow = {
   id: string
@@ -94,15 +96,21 @@ async function validateFolderIcon(db: D1Database, icon: ReturnType<typeof folder
 }
 
 async function readNote(db: D1Database, id: string) {
-  return db.prepare(`
+  const row = await db.prepare(`
     SELECT n.id, n.title, n.content, n.source_url, n.platform, n.folder_id,
            f.name AS folder_name, n.status, n.usage, n.icon_name, n.icon_asset_id,
            n.icon_url, n.is_pinned,
-           n.created_at, n.updated_at
+           n.created_at, n.updated_at,
+           COALESCE((SELECT json_group_array(t.name)
+             FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
+             WHERE nt.note_id = n.id), '[]') AS tags_json
     FROM notes n
     LEFT JOIN folders f ON f.id = n.folder_id
     WHERE n.id = ?
-  `).bind(id).first<NoteRow>()
+  `).bind(id).first<NoteDbRow>()
+  if (!row) return null
+  const { tags_json, ...note } = row
+  return { ...note, tags: JSON.parse(tags_json || '[]') as string[] }
 }
 
 app.get('/api/health', async (c) => {
@@ -226,7 +234,7 @@ app.post('/api/ai/search', async (c) => {
 
 app.get('/api/folders', async (c) => {
   const { results } = await c.env.DB.prepare(`
-    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at, COUNT(n.id) AS item_count,
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at, f.updated_at, COUNT(n.id) AS item_count,
            (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
     FROM folders f
     LEFT JOIN notes n ON n.folder_id = f.id
@@ -252,16 +260,16 @@ app.post('/api/folders', async (c) => {
   const id = crypto.randomUUID()
   try {
     await c.env.DB.prepare(`
-      INSERT INTO folders (id, name, parent_id, icon_name, icon_asset_id, icon_url)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, name, parentFolderId, icon.iconName, icon.iconAssetId, icon.iconUrl).run()
+      INSERT INTO folders (id, name, parent_id, icon_name, icon_asset_id, icon_url, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, name, parentFolderId, icon.iconName, icon.iconAssetId, icon.iconUrl, new Date().toISOString(), new Date().toISOString()).run()
   } catch (cause) {
     if (String(cause).toLowerCase().includes('unique')) return c.json({ error: 'Folder dengan nama itu sudah ada.' }, 409)
     throw cause
   }
 
   const folder = await c.env.DB.prepare(`
-    SELECT id, name, parent_id, is_pinned, is_system, icon_name, icon_asset_id, icon_url, created_at, 0 AS item_count, 0 AS child_count FROM folders WHERE id = ?
+    SELECT id, name, parent_id, is_pinned, is_system, icon_name, icon_asset_id, icon_url, created_at, updated_at, 0 AS item_count, 0 AS child_count FROM folders WHERE id = ?
   `).bind(id).first<FolderRow>()
   return c.json(folder, 201)
 })
@@ -280,15 +288,15 @@ app.patch('/api/folders/:id', async (c) => {
 
   try {
     await c.env.DB.prepare(`
-      UPDATE folders SET name = ?, icon_name = ?, icon_asset_id = ?, icon_url = ? WHERE id = ?
-    `).bind(name, icon.iconName, icon.iconAssetId, icon.iconUrl, id).run()
+      UPDATE folders SET name = ?, icon_name = ?, icon_asset_id = ?, icon_url = ?, updated_at = ? WHERE id = ?
+    `).bind(name, icon.iconName, icon.iconAssetId, icon.iconUrl, new Date().toISOString(), id).run()
   } catch (cause) {
     if (String(cause).toLowerCase().includes('unique')) return c.json({ error: 'Folder dengan nama itu sudah ada.' }, 409)
     throw cause
   }
 
   return c.json(await c.env.DB.prepare(`
-    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at,
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at, f.updated_at,
            (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id) AS item_count,
            (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
     FROM folders f WHERE f.id = ?
@@ -316,7 +324,7 @@ app.delete('/api/folders/:id', async (c) => {
           status = 'draft', usage = NULL, updated_at = ?
       WHERE folder_id IN (SELECT id FROM folder_tree)
     `).bind(id, id, new Date().toISOString()),
-      c.env.DB.prepare('UPDATE folders SET parent_id = ? WHERE parent_id = ?').bind('system-draft', id),
+      c.env.DB.prepare('UPDATE folders SET parent_id = ?, updated_at = ? WHERE parent_id = ?').bind('system-draft', new Date().toISOString(), id),
       c.env.DB.prepare('DELETE FROM folders WHERE id = ?').bind(id),
     ])
   } else {
@@ -350,7 +358,7 @@ app.patch('/api/folders/:id/pin', async (c) => {
   if (typeof body.pinned !== 'boolean') return c.json({ error: 'Status sematan tidak valid.' }, 400)
   await c.env.DB.prepare('UPDATE folders SET is_pinned = ? WHERE id = ?').bind(body.pinned ? 1 : 0, id).run()
   return c.json(await c.env.DB.prepare(`
-    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at,
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at, f.updated_at,
            (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id) AS item_count,
            (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
     FROM folders f WHERE f.id = ?
@@ -388,13 +396,65 @@ app.get('/api/notes', async (c) => {
     SELECT n.id, n.title, n.content, n.source_url, n.platform, n.folder_id,
            f.name AS folder_name, n.status, n.usage, n.icon_name, n.icon_asset_id,
            n.icon_url, n.is_pinned,
-           n.created_at, n.updated_at
+           n.created_at, n.updated_at,
+           COALESCE((SELECT json_group_array(t.name)
+             FROM note_tags nt JOIN tags t ON t.id = nt.tag_id
+             WHERE nt.note_id = n.id), '[]') AS tags_json
     FROM notes n
     LEFT JOIN folders f ON f.id = n.folder_id
     ${where}
     ORDER BY n.is_pinned DESC, n.created_at DESC, n.id DESC
-  `).bind(...values).all<NoteRow>()
+  `).bind(...values).all<NoteDbRow>()
+  return c.json(results.map(({ tags_json, ...note }) => ({ ...note, tags: JSON.parse(tags_json || '[]') as string[] })))
+})
+
+app.get('/api/tags', async (c) => {
+  const { results } = await c.env.DB.prepare(`
+    SELECT t.id, t.name, COUNT(nt.note_id) AS note_count
+    FROM tags t LEFT JOIN note_tags nt ON nt.tag_id = t.id
+    GROUP BY t.id
+    ORDER BY t.name COLLATE NOCASE ASC
+  `).all<{ id: string; name: string; note_count: number }>()
   return c.json(results)
+})
+
+app.put('/api/notes/:id/tags', async (c) => {
+  const id = c.req.param('id')
+  if (!await c.env.DB.prepare('SELECT id FROM notes WHERE id = ?').bind(id).first()) {
+    return c.json({ error: 'Catatan tidak ditemukan.' }, 404)
+  }
+  const body = await c.req.json<{ tags?: unknown }>().catch(() => ({} as { tags?: unknown }))
+  if (!Array.isArray(body.tags) || body.tags.length > 20 || body.tags.some((tag) => typeof tag !== 'string')) {
+    return c.json({ error: 'Pilih maksimal 20 tag.' }, 400)
+  }
+  const names: string[] = []
+  const seen = new Set<string>()
+  for (const value of body.tags as string[]) {
+    const name = value.normalize('NFC').trim()
+    if (!name || name.length > 40 || /[\u0000-\u001f\u007f]/.test(name)) {
+      return c.json({ error: 'Nama tag harus 1–40 karakter.' }, 400)
+    }
+    const key = name.toLowerCase()
+    if (!seen.has(key)) { seen.add(key); names.push(name) }
+  }
+
+  if (names.length) {
+    await c.env.DB.batch(names.map((name) => c.env.DB.prepare('INSERT OR IGNORE INTO tags (id, name) VALUES (?, ?)').bind(crypto.randomUUID(), name)))
+  }
+  const tags = names.length
+    ? (await c.env.DB.prepare(`SELECT id, name FROM tags WHERE name IN (${names.map(() => '?').join(', ')})`).bind(...names).all<{ id: string; name: string }>()).results
+    : []
+  const tagIdByName = new Map(tags.map((tag) => [tag.name.toLowerCase(), tag.id]))
+  const statements = [
+    c.env.DB.prepare('DELETE FROM note_tags WHERE note_id = ?').bind(id),
+    ...names.flatMap((name) => {
+      const tagId = tagIdByName.get(name.toLowerCase())
+      return tagId ? [c.env.DB.prepare('INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)').bind(id, tagId)] : []
+    }),
+    c.env.DB.prepare('UPDATE notes SET updated_at = ? WHERE id = ?').bind(new Date().toISOString(), id),
+  ]
+  await c.env.DB.batch(statements)
+  return c.json(await readNote(c.env.DB, id))
 })
 
 app.get('/api/notes/:id', async (c) => {

@@ -16,6 +16,7 @@ export interface Folder {
   icon_asset_id: string | null
   icon_url: string | null
   created_at: string
+  updated_at: string
 }
 
 export interface Note {
@@ -32,8 +33,15 @@ export interface Note {
   icon_asset_id: string | null
   icon_url: string | null
   is_pinned: number
+  tags: string[]
   created_at: string
   updated_at: string
+}
+
+export interface Tag {
+  id: string
+  name: string
+  note_count: number
 }
 
 export interface IconAsset {

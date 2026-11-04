@@ -1,4 +1,4 @@
-import type { Folder, IconAsset, Note, NoteInput } from './types'
+import type { Folder, IconAsset, Note, NoteInput, Tag } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
@@ -19,6 +19,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getFolders: () => request<Folder[]>('/api/folders'),
   getNotes: () => request<Note[]>('/api/notes'),
+  getTags: () => request<Tag[]>('/api/tags'),
   getIcons: () => request<IconAsset[]>('/api/icons'),
   getAiStatus: () => request<{ configured: boolean }>('/api/ai/status'),
   createFolder: (name: string, parentFolderId: string | null, iconName: string, iconAssetId: string, iconUrl: string) => request<Folder>('/api/folders', {
@@ -44,6 +45,10 @@ export const api = {
   updateNote: (id: string, input: NoteInput | Partial<NoteInput>) => request<Note>(`/api/notes/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
+  }),
+  updateNoteTags: (id: string, tags: string[]) => request<Note>(`/api/notes/${id}/tags`, {
+    method: 'PUT',
+    body: JSON.stringify({ tags }),
   }),
   pinNote: (id: string, pinned: boolean) => request<Note>(`/api/notes/${id}/pin`, {
     method: 'PATCH',
