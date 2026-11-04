@@ -4,9 +4,9 @@
 
 - Cloudflare Worker: `devpocket`
 - D1 database: `devpocket` (primary location hint: Asia Pacific)
-- D1 migrations `0001_initial_schema.sql` through `0004_draft_as_folder.sql`: applied
+- D1 migrations `0001_initial_schema.sql` through `0005_folder_icons.sql`: applied
 - R2 bucket `devpocket-icons`: created (Standard, Asia Pacific)
-- Latest Worker version: deployed `d4f0daab-fa4b-48d8-89e1-aa25b8d6873e` (folder routes and item detail modal URLs)
+- Latest Worker version: deployed `7ae18abb-12fd-48fc-a418-659421774ffe` (custom folder icons)
 - Production URL: https://devpocket.fadayan.workers.dev
 - PWA: manifest, install icons, install button, and app-shell service worker are enabled
 - Cloudflare Access: enabled for all Worker traffic; unauthenticated requests to both `/` and `/api/health` redirect to Access
@@ -31,13 +31,13 @@ The service worker caches the app shell and static assets only. Notes and API re
 - Production D1: `npm run db:migrate:remote`
 - Production build and deploy: `npm run deploy` (keeps the Access policy in place)
 
-For the folder/pin update, run `npm run db:migrate:remote` before `npm run deploy`. Migration 0004 moves existing Draft notes into the new system Draft folder while preserving note content and metadata.
+Run `npm run db:migrate:remote` before deploying whenever a new migration is added. Migration 0004 moved existing Draft notes into the system Draft folder; migration 0005 added optional built-in, uploaded, and URL icons to folders.
 
 Do not use `--remote` for local database work. Production uses a separate D1 binding in the `production` environment.
 
 ## R2 ikon
 
-The Worker expects a private R2 bucket named `devpocket-icons`, in Standard storage and the Asia Pacific location. Create it in the Cloudflare dashboard, and leave public access disabled. The production binding is already declared in `app/wrangler.jsonc`.
+The Worker expects a private R2 bucket named `devpocket-icons`, in Standard storage and the Asia Pacific location. Create it in the Cloudflare dashboard, and leave public access disabled. The production binding is already declared in `app/wrangler.jsonc`. Uploaded icons can be reused on notes and folders; the Worker prevents deleting an icon while either uses it.
 
 Local development uses Wrangler's local R2 storage under `.wrangler`; it does not write to the production bucket. Uploaded images are limited to PNG, JPEG, and WebP files up to 2 MB. The Worker serves them through the app, so the bucket does not need a public domain.
 
