@@ -244,6 +244,77 @@ app.post('/api/folders', async (c) => {
   return c.json(folder, 201)
 })
 
+app.patch('/api/folders/:id', async (c) => {
+  const id = c.req.param('id')
+  const current = await c.env.DB.prepare('SELECT id, is_system FROM folders WHERE id = ?').bind(id).first<{ id: string; is_system: number }>()
+  if (!current) return c.json({ error: 'Folder tidak ditemukan.' }, 404)
+  if (current.is_system) return c.json({ error: 'Folder Draft tidak bisa diganti namanya.' }, 400)
+  const body = await c.req.json<{ name?: unknown }>().catch(() => ({} as { name?: unknown }))
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name || name.length > 60) return c.json({ error: 'Nama folder harus 1–60 karakter.' }, 400)
+
+  try {
+    await c.env.DB.prepare('UPDATE folders SET name = ? WHERE id = ?').bind(name, id).run()
+  } catch (cause) {
+    if (String(cause).toLowerCase().includes('unique')) return c.json({ error: 'Folder dengan nama itu sudah ada.' }, 409)
+    throw cause
+  }
+
+  return c.json(await c.env.DB.prepare(`
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.created_at,
+           (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id) AS item_count,
+           (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
+    FROM folders f WHERE f.id = ?
+  `).bind(id).first<FolderRow>())
+})
+
+app.delete('/api/folders/:id', async (c) => {
+  const id = c.req.param('id')
+  const current = await c.env.DB.prepare('SELECT id, is_system FROM folders WHERE id = ?').bind(id).first<{ id: string; is_system: number }>()
+  if (!current) return c.json({ error: 'Folder tidak ditemukan.' }, 404)
+  if (current.is_system) return c.json({ error: 'Folder Draft tidak bisa dihapus.' }, 400)
+  const body = await c.req.json<{ contents?: unknown }>().catch(() => ({} as { contents?: unknown }))
+  if (body.contents !== 'draft' && body.contents !== 'delete') return c.json({ error: 'Pilih pindahkan isi ke Draft atau hapus semua.' }, 400)
+
+  if (body.contents === 'draft') {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`
+      WITH RECURSIVE folder_tree(id) AS (
+        SELECT id FROM folders WHERE id = ?
+        UNION ALL
+        SELECT child.id FROM folders child JOIN folder_tree parent ON child.parent_id = parent.id
+      )
+      UPDATE notes
+      SET folder_id = CASE WHEN folder_id = ? THEN 'system-draft' ELSE folder_id END,
+          status = 'draft', usage = NULL, updated_at = ?
+      WHERE folder_id IN (SELECT id FROM folder_tree)
+    `).bind(id, id, new Date().toISOString()),
+      c.env.DB.prepare('UPDATE folders SET parent_id = ? WHERE parent_id = ?').bind('system-draft', id),
+      c.env.DB.prepare('DELETE FROM folders WHERE id = ?').bind(id),
+    ])
+  } else {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`
+      WITH RECURSIVE folder_tree(id) AS (
+        SELECT id FROM folders WHERE id = ?
+        UNION ALL
+        SELECT child.id FROM folders child JOIN folder_tree parent ON child.parent_id = parent.id
+      )
+      DELETE FROM notes WHERE folder_id IN (SELECT id FROM folder_tree)
+    `).bind(id),
+      c.env.DB.prepare(`
+      WITH RECURSIVE folder_tree(id) AS (
+        SELECT id FROM folders WHERE id = ?
+        UNION ALL
+        SELECT child.id FROM folders child JOIN folder_tree parent ON child.parent_id = parent.id
+      )
+      DELETE FROM folders WHERE id IN (SELECT id FROM folder_tree)
+    `).bind(id),
+    ])
+  }
+  return c.body(null, 204)
+})
+
 app.patch('/api/folders/:id/pin', async (c) => {
   const id = c.req.param('id')
   const current = await c.env.DB.prepare('SELECT id, is_pinned FROM folders WHERE id = ?').bind(id).first<{ id: string; is_pinned: number }>()

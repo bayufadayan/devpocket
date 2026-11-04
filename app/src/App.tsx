@@ -15,7 +15,7 @@ const tabOptions: { id: CollectionTab; label: string }[] = [
 type EditorState = { mode: 'new'; folderId: string | null } | { mode: 'edit'; note: Note } | { mode: 'detail'; note: Note } | null
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }> }
 
-function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | 'list' | 'columns' | 'plus' | 'search' | 'filter' | 'close' | 'back' | 'external' | 'edit' | 'trash' | 'sparkles' | 'install' | 'star'; size?: number; filled?: boolean }) {
+function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | 'list' | 'columns' | 'plus' | 'search' | 'filter' | 'close' | 'back' | 'external' | 'edit' | 'trash' | 'sparkles' | 'install' | 'star' | 'more'; size?: number; filled?: boolean }) {
   const paths: Record<string, ReactNode> = {
     folder: <><path d="M3 6.5h6l2 2h10v10.8H3z"/><path d="M3 9h18"/></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
@@ -32,6 +32,7 @@ function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | '
     sparkles: <><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></>,
     install: <><path d="M12 3v11m0 0 4-4m-4 4-4-4"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></>,
     star: <path d="m12 3 2.75 5.58 6.16.9-4.45 4.34 1.05 6.13L12 17.06l-5.51 2.9 1.05-6.14L3.1 9.48l6.15-.9L12 3Z"/>,
+    more: <><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></>,
   }
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
@@ -110,6 +111,11 @@ function App() {
   const [editor, setEditor] = useState<EditorState>(null)
   const [folderModal, setFolderModal] = useState(false)
   const [folderModalParentId, setFolderModalParentId] = useState('')
+  const [folderMenuId, setFolderMenuId] = useState<string | null>(null)
+  const [editingFolder, setEditingFolder] = useState<Folder | null>(null)
+  const [folderNameDraft, setFolderNameDraft] = useState('')
+  const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null)
+  const [folderActionBusy, setFolderActionBusy] = useState(false)
   const [toast, setToast] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
   const [aiSearchMode, setAiSearchMode] = useState(false)
@@ -165,6 +171,7 @@ function App() {
   useEffect(() => { localStorage.setItem('devpocket-view', view) }, [view])
   useEffect(() => { localStorage.setItem('devpocket-layout', layout) }, [layout])
   useEffect(() => { localStorage.setItem('devpocket-tab', tab) }, [tab])
+  useEffect(() => { setFolderMenuId(null) }, [openFolder, view])
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(''), 2200); return () => clearTimeout(id) }, [toast])
   useEffect(() => {
     const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); document.querySelector<HTMLInputElement>('#global-search')?.focus() } }
@@ -327,6 +334,37 @@ function App() {
     try { await api.createFolder(String(form.get('name') ?? '').trim(), String(form.get('parentFolderId') ?? '') || null); setFolderModal(false); setToast('Folder ditambahkan'); await refresh() }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menambah folder.') }
   }
+  function startRenameFolder(folder: Folder) {
+    setFolderMenuId(null)
+    setError('')
+    setFolderNameDraft(folder.name)
+    setEditingFolder(folder)
+  }
+  async function saveFolderName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editingFolder) return
+    setFolderActionBusy(true)
+    setError('')
+    try {
+      const updated = await api.renameFolder(editingFolder.id, folderNameDraft.trim())
+      setFolders((current) => current.map((folder) => folder.id === updated.id ? updated : folder))
+      setEditingFolder(null)
+      setToast('Nama folder diperbarui')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal mengganti nama folder.') }
+    finally { setFolderActionBusy(false) }
+  }
+  async function deleteFolderContents(contents: 'draft' | 'delete') {
+    if (!folderToDelete) return
+    setFolderActionBusy(true)
+    setError('')
+    try {
+      await api.deleteFolder(folderToDelete.id, contents)
+      setFolderToDelete(null)
+      setToast(contents === 'draft' ? 'Isi folder dipindahkan ke Draft' : 'Folder dan isinya dihapus')
+      await refresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menghapus folder.') }
+    finally { setFolderActionBusy(false) }
+  }
   async function uploadIcon(file: File) {
     const asset = await api.uploadIcon(file)
     setIconAssets((current) => [asset, ...current])
@@ -382,7 +420,8 @@ function App() {
 
   function FolderCard({ folder }: { folder: Folder }) {
     return <div className="folder-wrap">
-      <button className={`folder-card${folder.is_system ? ' draft-folder' : ''}`} onClick={() => setOpenFolder(folder.id)}><span className="folder-icon"><Icon name="folder" /></span><strong>{folder.name}</strong><span>{folderItemCounts.get(folder.id) ?? folder.item_count} item{folder.child_count ? ` · ${folder.child_count} folder` : ''}</span></button>
+      <button className={`folder-card${folder.is_system ? ' draft-folder' : ''}`} onClick={() => { setFolderMenuId(null); setOpenFolder(folder.id) }}><span className="folder-icon"><Icon name="folder" /></span><strong>{folder.name}</strong><span>{folderItemCounts.get(folder.id) ?? folder.item_count} item{folder.child_count ? ` · ${folder.child_count} folder` : ''}</span></button>
+      {!folder.is_system && <div className="folder-menu-wrap"><button className="folder-menu-trigger" aria-label={`Menu ${folder.name}`} aria-expanded={folderMenuId === folder.id} title={`Menu ${folder.name}`} onClick={() => setFolderMenuId((current) => current === folder.id ? null : folder.id)}><Icon name="more" size={18} /></button>{folderMenuId === folder.id && <div className="folder-menu"><button onClick={() => startRenameFolder(folder)}><Icon name="edit" size={15} />Ganti nama</button><button className="folder-menu-delete" onClick={() => { setFolderMenuId(null); setError(''); setFolderToDelete(folder) }}><Icon name="trash" size={15} />Hapus folder</button></div>}</div>}
       <button className={`folder-pin${folder.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleFolderPinned(folder)} aria-label={folder.is_pinned ? `Lepas sematan ${folder.name}` : `Sematkan ${folder.name}`} title={folder.is_pinned ? 'Lepas sematan folder' : 'Sematkan folder'}><Icon name="star" size={17} filled={Boolean(folder.is_pinned)} /></button>
       <button className="folder-add" onClick={() => openNew(folder.id)} aria-label={`Tambah catatan ke ${folder.name}`} title={`Tambah catatan ke ${folder.name}`}><Icon name="plus" size={16} /></button>
     </div>
@@ -409,7 +448,7 @@ function App() {
     <main className="workspace">
       <div className="search-row"><div className={`search-box${aiSearchMode ? ' ai-search-box' : ''}`}><Icon name="search" /><input id="global-search" aria-label="Cari catatan" value={query} onChange={(event) => { setQuery(event.target.value); setAiResults(null) }} onKeyDown={(event) => { if (event.key === 'Enter' && aiSearchMode) void runAiSearch() }} placeholder={aiSearchMode ? (aiConfigured ? 'Jelaskan yang kamu ingat...' : 'Gemini belum disiapkan') : 'Cari catatan...'} /><button className={`search-mode${aiSearchMode ? ' active' : ''}`} type="button" aria-pressed={aiSearchMode} onClick={() => { setAiSearchMode(!aiSearchMode); setAiResults(null) }} title="Ganti pencarian kata atau AI">{aiSearchMode ? 'AI' : 'Kata'}</button>{aiSearchMode ? <button className="search-submit" type="button" onClick={() => void runAiSearch()} disabled={!aiConfigured || aiSearching} aria-label="Cari dengan AI" title={aiConfigured ? 'Cari dengan AI' : 'Gemini belum disiapkan'}>{aiSearching ? '…' : <Icon name="sparkles" size={16} />}</button> : <kbd>Ctrl K</kbd>}</div><div className="filter-holder"><button className={`icon-button filter-button${filterOpen ? ' pressed' : ''}`} aria-label="Filter" aria-expanded={filterOpen} onClick={() => setFilterOpen(!filterOpen)}><Icon name="filter" />{(platformFilter || folderFilter || dateFilter) && <i className="filter-dot" />}</button>{filterOpen && <div className="filter-pop"><label htmlFor="platform-filter">Platform</label><select id="platform-filter" value={platformFilter} onChange={(event) => setPlatformFilter(event.target.value)}><option value="">Semua platform</option>{platforms.map((platform) => <option key={platform}>{platform}</option>)}</select><label htmlFor="folder-filter">Folder</label><select id="folder-filter" value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)}><option value="">Semua folder</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select><label htmlFor="date-filter">Tanggal ditambahkan</label><select id="date-filter" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}><option value="">Kapan saja</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option></select><button className="link-button" onClick={() => { setPlatformFilter(''); setFolderFilter(''); setDateFilter(''); setFilterOpen(false) }}>Hapus filter</button></div>}</div></div>
 
-      {error && !editor && !folderModal && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')} aria-label="Tutup pesan">×</button></div>}
+      {error && !editor && !folderModal && !editingFolder && !folderToDelete && <div className="error-banner" role="alert">{error}<button onClick={() => setError('')} aria-label="Tutup pesan">×</button></div>}
 
       {openFolder && <nav className="breadcrumbs" aria-label="Lokasi"><button onClick={() => setOpenFolder(null)}>Koleksi</button><span>/</span>{currentPath.map((folder, index) => <span className="breadcrumb-part" key={folder.id}>{index > 0 && <span>/</span>}{index === currentPath.length - 1 ? <span aria-current="page">{folder.name}</span> : <button onClick={() => setOpenFolder(folder.id)}>{folder.name}</button>}</span>)}</nav>}
 
@@ -428,6 +467,10 @@ function App() {
     </main>
 
     {folderModal && <Modal title={folderModalParentId ? 'Tambah subfolder' : 'Tambah folder'} initialFocusSelector="input[name=name]" onClose={() => setFolderModal(false)}><form className="form-body" onSubmit={(event) => void createFolder(event)}><label>Nama folder<input name="name" maxLength={60} required placeholder="Misalnya: Tools" /></label><label>Folder induk<select name="parentFolderId" value={folderModalParentId} onChange={(event) => setFolderModalParentId(event.target.value)}><option value="">Koleksi</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select></label>{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" onClick={() => setFolderModal(false)}>Batal</button><button className="button primary" type="submit">Simpan</button></footer></form></Modal>}
+
+    {editingFolder && <Modal title="Ganti nama folder" initialFocusSelector="input[name=name]" onClose={() => { if (!folderActionBusy) setEditingFolder(null) }}><form className="form-body" onSubmit={(event) => void saveFolderName(event)}><label>Nama folder<input name="name" value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} maxLength={60} required /></label>{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setEditingFolder(null)}>Batal</button><button className="button primary" type="submit" disabled={folderActionBusy}>{folderActionBusy ? 'Menyimpan…' : 'Simpan'}</button></footer></form></Modal>}
+
+    {folderToDelete && <Modal title="Hapus folder" onClose={() => { if (!folderActionBusy) setFolderToDelete(null) }}><div className="delete-folder-dialog"><div><strong>Hapus “{folderToDelete.name}”?</strong><p>Pilih apa yang dilakukan dengan item dan subfolder di dalamnya.</p></div>{error && <p className="modal-error" role="alert">{error}</p>}<div className="delete-folder-options"><button className="button" type="button" disabled={folderActionBusy} onClick={() => void deleteFolderContents('draft')}><span><strong>Pindahkan ke Draft</strong><small>Item dan subfolder tetap tersimpan di Draft.</small></span></button><button className="button danger" type="button" disabled={folderActionBusy} onClick={() => void deleteFolderContents('delete')}><span><strong>{folderActionBusy ? 'Menghapus…' : 'Hapus semua'}</strong><small>Folder, subfolder, dan semua item dihapus permanen.</small></span></button></div><footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setFolderToDelete(null)}>Batal</button></footer></div></Modal>}
 
     {(editor?.mode === 'new' || editor?.mode === 'edit') && <Modal title={editor.mode === 'edit' ? 'Edit catatan' : 'Tambah catatan'} initialFocusSelector="input[name=title]" onClose={() => setEditor(null)} wide><form className="form-body note-form" onSubmit={(event) => void saveNote(event)}>
       <label>Judul<input ref={titleInput} name="title" required maxLength={120} defaultValue={editor.mode === 'edit' ? editor.note.title : ''} placeholder="Judul catatan" /></label>

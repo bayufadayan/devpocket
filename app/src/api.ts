@@ -25,6 +25,14 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ name, parentFolderId }),
   }),
+  renameFolder: (id: string, name: string) => request<Folder>(`/api/folders/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  }),
+  deleteFolder: (id: string, contents: 'draft' | 'delete') => request<void>(`/api/folders/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ contents }),
+  }),
   pinFolder: (id: string, pinned: boolean) => request<Folder>(`/api/folders/${id}/pin`, {
     method: 'PATCH',
     body: JSON.stringify({ pinned }),
