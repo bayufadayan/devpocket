@@ -701,7 +701,7 @@ function App() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal memindahkan catatan.') }
   }
 
-  function NoteMenu({ note }: { note: Note }) {
+  function renderNoteMenu(note: Note) {
     return <div className="note-menu-wrap" data-note-menu>
       <button className="note-menu-trigger" type="button" aria-label={`Menu ${note.title}`} aria-expanded={noteMenuId === note.id} title={`Menu ${note.title}`} onClick={() => setNoteMenuId((current) => current === note.id ? null : note.id)}><Icon name="more" size={18} /></button>
       {noteMenuId === note.id && <div className="note-card-menu">
@@ -711,9 +711,9 @@ function App() {
     </div>
   }
 
-  function NoteCard({ note, showFolder = false }: { note: Note; showFolder?: boolean }) {
-    return <article className={`note-card${noteMenuId === note.id ? ' has-menu' : ''}`} onContextMenu={(event) => showNoteMoveMenu(note, event)}>
-      <NoteMenu note={note} />
+  function renderNoteCard(note: Note, showFolder = false, key = note.id) {
+    return <article key={key} className={`note-card${noteMenuId === note.id ? ' has-menu' : ''}`} onContextMenu={(event) => showNoteMoveMenu(note, event)}>
+      {renderNoteMenu(note)}
       <button className="note-card-main" onClick={() => openNoteModal(note)}>
         <span className="note-meta"><i className={`platform-dot dot-${note.platform.toLowerCase().replace(/[^a-z]/g, '')}`} />{note.platform}<span>·</span>{formatDate(note.created_at)}</span>
         <span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={30} />}<strong>{note.title}</strong></span>
@@ -725,8 +725,8 @@ function App() {
     </article>
   }
 
-  function FolderCard({ folder }: { folder: Folder }) {
-    return <div className="folder-wrap">
+  function renderFolderCard(folder: Folder, key = folder.id) {
+    return <div className="folder-wrap" key={key}>
       <button className={`folder-card${folder.is_system ? ' draft-folder' : ''}`} onClick={() => { setFolderMenuId(null); navigateToFolder(folder.id) }}><FolderWatermark folder={folder} /><span className="folder-icon"><Icon name="folder" /></span><strong>{folder.name}</strong><span>{folderItemCounts.get(folder.id) ?? folder.item_count} item{folder.child_count ? ` · ${folder.child_count} folder` : ''}</span></button>
       {!folder.is_system && <div className="folder-menu-wrap"><button className="folder-menu-trigger" aria-label={`Menu ${folder.name}`} aria-expanded={folderMenuId === folder.id} title={`Menu ${folder.name}`} onClick={() => setFolderMenuId((current) => current === folder.id ? null : folder.id)}><Icon name="more" size={18} /></button>{folderMenuId === folder.id && <div className="folder-menu"><button onClick={() => startRenameFolder(folder)}><Icon name="edit" size={15} />Edit folder</button><button className="folder-menu-delete" onClick={() => { setFolderMenuId(null); setError(''); setFolderToDelete(folder) }}><Icon name="trash" size={15} />Hapus folder</button></div>}</div>}
       <button className={`folder-pin${folder.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleFolderPinned(folder)} aria-label={folder.is_pinned ? `Lepas sematan ${folder.name}` : `Sematkan ${folder.name}`} title={folder.is_pinned ? 'Lepas sematan folder' : 'Sematkan folder'}><Icon name="star" size={17} filled={Boolean(folder.is_pinned)} /></button>
@@ -734,30 +734,30 @@ function App() {
     </div>
   }
 
-  function CompareCard({ note }: { note: Note }) {
-    return <article className={`compare-card${noteMenuId === note.id ? ' has-menu' : ''}`} draggable onContextMenu={(event) => showNoteMoveMenu(note, event)} onDragStart={(event) => { setDragId(note.id); event.dataTransfer.setData('text/plain', note.id) }} onDragEnd={() => setDragId(null)}>
+  function renderCompareCard(note: Note, key = note.id) {
+    return <article key={key} className={`compare-card${noteMenuId === note.id ? ' has-menu' : ''}`} draggable onContextMenu={(event) => showNoteMoveMenu(note, event)} onDragStart={(event) => { setDragId(note.id); event.dataTransfer.setData('text/plain', note.id) }} onDragEnd={() => setDragId(null)}>
       <button className="compare-main" onClick={() => openNoteModal(note)}><span className="note-meta">{note.platform} · {formatDate(note.created_at)}</span><span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={28} />}<strong>{note.title}</strong></span><span className="note-folder"><Icon name="folder" size={14} />{note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name : note.folder_name}</span>{note.tags.length > 0 && <span className="note-tags">{note.tags.slice(0, 3).map((tag) => <span className="note-tag" key={tag}>{tag}</span>)}{note.tags.length > 3 && <span className="note-tag note-tag-more">+{note.tags.length - 3}</span>}</span>}</button>
-      <div className="compare-card-actions"><button className={`pin-button${note.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleNotePinned(note)} aria-label={note.is_pinned ? 'Lepas sematan item' : 'Sematkan item'} title={note.is_pinned ? 'Lepas sematan' : 'Sematkan'}><Icon name="star" size={17} filled={Boolean(note.is_pinned)} /></button><NoteMenu note={note} /><span className="drag-mark" aria-hidden="true">⠿</span></div>
+      <div className="compare-card-actions"><button className={`pin-button${note.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleNotePinned(note)} aria-label={note.is_pinned ? 'Lepas sematan item' : 'Sematkan item'} title={note.is_pinned ? 'Lepas sematan' : 'Sematkan'}><Icon name="star" size={17} filled={Boolean(note.is_pinned)} /></button>{renderNoteMenu(note)}<span className="drag-mark" aria-hidden="true">⠿</span></div>
     </article>
   }
 
-  function CompareBoard({ items }: { items: Note[] }) {
+  function renderCompareBoard(items: Note[]) {
     return <div className="compare-grid">{(['active', 'try', 'reference', 'draft'] as const).map((status) => {
       const list = items.filter((note) => status === 'draft' ? note.status === 'draft' : note.status === 'collection' && note.usage === status)
-      return <section className={`compare-column${dragOver === status ? ' drag-over' : ''}`} key={status} onDragOver={(event) => { event.preventDefault(); setDragOver(status) }} onDragLeave={() => setDragOver(null)} onDrop={(event) => { setDragOver(null); void dropOn(event, status) }}><header><h2>{status === 'draft' ? 'Draft' : usageLabels[status]}</h2><span>{list.length}</span></header><div className="compare-list">{list.map((note) => <CompareCard key={note.id} note={note} />)}</div></section>
+      return <section className={`compare-column${dragOver === status ? ' drag-over' : ''}`} key={status} onDragOver={(event) => { event.preventDefault(); setDragOver(status) }} onDragLeave={() => setDragOver(null)} onDrop={(event) => { setDragOver(null); void dropOn(event, status) }}><header><h2>{status === 'draft' ? 'Draft' : usageLabels[status]}</h2><span>{list.length}</span></header><div className="compare-list">{list.map((note) => renderCompareCard(note))}</div></section>
     })}</div>
   }
 
-  function SortSelect({ value, onChange, label }: { value: SortMode; onChange: (value: SortMode) => void; label: string }) {
+  function renderSortSelect(value: SortMode, onChange: (value: SortMode) => void, label: string) {
     return <label className="sort-control"><span className="sr-only">{label}</span><select className="toolbar-select" aria-label={label} value={value} onChange={(event) => onChange(event.target.value as SortMode)}>{sortOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
   }
 
-  function GroupSelect() {
+  function renderGroupSelect() {
     return <label className="sort-control"><span className="sr-only">Kelompokkan item</span><select className="toolbar-select" aria-label="Kelompokkan item" value={groupMode} onChange={(event) => setGroupMode(event.target.value as GroupMode)}><option value="none">Tanpa grup</option><option value="tag">Kelompokkan: Tag</option></select></label>
   }
 
   function renderNoteGrid(items: Note[], showFolder: boolean) {
-    if (groupMode !== 'tag') return <div className="items-grid">{items.map((note) => <NoteCard key={note.id} note={note} showFolder={showFolder} />)}</div>
+    if (groupMode !== 'tag') return <div className="items-grid">{items.map((note) => renderNoteCard(note, showFolder))}</div>
     const untaggedKey = '\u0000untagged'
     const grouped = new Map<string, Note[]>()
     for (const note of items) {
@@ -766,7 +766,7 @@ function App() {
     }
     const groups = [...grouped.entries()].sort(([a], [b]) => a === untaggedKey ? 1 : b === untaggedKey ? -1 : nameCollator.compare(a, b))
     if (!groups.length) return <div className="items-grid" />
-    return <div className="tag-groups">{groups.map(([name, groupItems]) => <section className="tag-group" key={name}><header><h2>{name === untaggedKey ? 'Tanpa tag' : name}</h2><span>{groupItems.length} item</span></header><div className="items-grid">{groupItems.map((note) => <NoteCard key={note.id} note={note} showFolder={showFolder} />)}</div></section>)}</div>
+    return <div className="tag-groups">{groups.map(([name, groupItems]) => <section className="tag-group" key={name}><header><h2>{name === untaggedKey ? 'Tanpa tag' : name}</h2><span>{groupItems.length} item</span></header><div className="items-grid">{groupItems.map((note) => renderNoteCard(note, showFolder))}</div></section>)}</div>
   }
 
   const pageTitle = currentFolder?.name ?? 'Koleksi'
@@ -782,16 +782,16 @@ function App() {
 
       <section className="section-head"><h1>{pageTitle}</h1><span className="count-label">{openFolder ? folderItemCounts.get(openFolder) ?? folderNotes.length : filtered.length} item</span></section>
 
-      {!openFolder && <div className="view-tools"><div className="segmented" role="group" aria-label="Tampilan koleksi"><button className={view === 'folders' ? 'selected' : ''} aria-pressed={view === 'folders'} onClick={() => setView('folders')} title="Folder"><Icon name="folder" /></button><button className={view === 'items' ? 'selected' : ''} aria-pressed={view === 'items'} onClick={() => setView('items')} title="Semua item"><Icon name="grid" /></button></div>{view === 'folders' && <div className="collection-controls"><SortSelect value={folderSort} onChange={setFolderSort} label="Urutkan folder" /><button className="button" onClick={() => startCreateFolder('')}><Icon name="plus" />Tambah folder</button></div>}{view === 'items' && <div className="collection-controls"><SortSelect value={itemSort} onChange={setItemSort} label="Urutkan item" />{layout === 'standard' && <GroupSelect />}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew()} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div>}</div>}
+      {!openFolder && <div className="view-tools"><div className="segmented" role="group" aria-label="Tampilan koleksi"><button className={view === 'folders' ? 'selected' : ''} aria-pressed={view === 'folders'} onClick={() => setView('folders')} title="Folder"><Icon name="folder" /></button><button className={view === 'items' ? 'selected' : ''} aria-pressed={view === 'items'} onClick={() => setView('items')} title="Semua item"><Icon name="grid" /></button></div>{view === 'folders' && <div className="collection-controls">{renderSortSelect(folderSort, setFolderSort, 'Urutkan folder')}<button className="button" onClick={() => startCreateFolder('')}><Icon name="plus" />Tambah folder</button></div>}{view === 'items' && <div className="collection-controls">{renderSortSelect(itemSort, setItemSort, 'Urutkan item')}{layout === 'standard' && renderGroupSelect()}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew()} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div>}</div>}
 
-      {openFolder && <div className="folder-view-tools">{currentFolder && <button className="button" onClick={() => startCreateFolder(currentFolder.id)}><Icon name="plus" />Tambah subfolder</button>}<div className="collection-controls"><SortSelect value={folderSort} onChange={setFolderSort} label="Urutkan folder" /><SortSelect value={itemSort} onChange={setItemSort} label="Urutkan item" />{layout === 'standard' && <GroupSelect />}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew(currentFolder?.id ?? null)} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div></div>}
+      {openFolder && <div className="folder-view-tools">{currentFolder && <button className="button" onClick={() => startCreateFolder(currentFolder.id)}><Icon name="plus" />Tambah subfolder</button>}<div className="collection-controls">{renderSortSelect(folderSort, setFolderSort, 'Urutkan folder')}{renderSortSelect(itemSort, setItemSort, 'Urutkan item')}{layout === 'standard' && renderGroupSelect()}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew(currentFolder?.id ?? null)} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div></div>}
 
       {loading ? <p className="empty-state">Memuat...</p> : openFolder ? <div className="folder-page">
-        {folderChildren.length > 0 && <div className="folder-grid">{folderChildren.map((folder) => <FolderCard key={folder.id} folder={folder} />)}</div>}
-        {layout === 'standard' ? <>{renderNoteGrid(folderNotes, false)}{!folderChildren.length && !folderNotes.length && <p className="empty-state">Folder ini masih kosong</p>}</> : <>{!folderNotes.length && <p className="empty-state">Belum ada item</p>}<CompareBoard items={folderNotes} /></>}
+        {folderChildren.length > 0 && <div className="folder-grid">{folderChildren.map((folder) => renderFolderCard(folder))}</div>}
+        {layout === 'standard' ? <>{renderNoteGrid(folderNotes, false)}{!folderChildren.length && !folderNotes.length && <p className="empty-state">Folder ini masih kosong</p>}</> : <>{!folderNotes.length && <p className="empty-state">Belum ada item</p>}{renderCompareBoard(folderNotes)}</>}
       </div> : view === 'folders' ? <div className="folder-grid">
-        {folderChildren.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
-      </div> : layout === 'standard' ? <><div ref={tabsSentinel} className="sticky-sentinel" aria-hidden="true" /><div className={`sticky-tabs${tabsStuck ? ' is-stuck' : ''}`}><nav className="status-tabs" aria-label="Filter status">{tabOptions.map((option) => <button key={option.id} className={tab === option.id ? 'active' : ''} aria-pressed={tab === option.id} onClick={() => setTab(option.id)}>{option.label}</button>)}</nav>{tabsStuck && <button className="button primary sticky-add" onClick={() => openNew()}><Icon name="plus" /><span>Tambah catatan</span></button>}</div>{renderNoteGrid(activeItems, true)}{!activeItems.length && <p className="empty-state">{aiResults ? 'Tidak ada catatan yang mirip' : query ? 'Tidak ada yang cocok' : 'Belum ada catatan'}</p>}</> : <CompareBoard items={sortNoteList(filtered, itemSort)} />}
+        {folderChildren.map((folder) => renderFolderCard(folder))}
+      </div> : layout === 'standard' ? <><div ref={tabsSentinel} className="sticky-sentinel" aria-hidden="true" /><div className={`sticky-tabs${tabsStuck ? ' is-stuck' : ''}`}><nav className="status-tabs" aria-label="Filter status">{tabOptions.map((option) => <button key={option.id} className={tab === option.id ? 'active' : ''} aria-pressed={tab === option.id} onClick={() => setTab(option.id)}>{option.label}</button>)}</nav>{tabsStuck && <button className="button primary sticky-add" onClick={() => openNew()}><Icon name="plus" /><span>Tambah catatan</span></button>}</div>{renderNoteGrid(activeItems, true)}{!activeItems.length && <p className="empty-state">{aiResults ? 'Tidak ada catatan yang mirip' : query ? 'Tidak ada yang cocok' : 'Belum ada catatan'}</p>}</> : renderCompareBoard(sortNoteList(filtered, itemSort))}
     </main>
 
     {folderModal && <Modal title={folderModalParentId ? 'Tambah subfolder' : 'Tambah folder'} initialFocusSelector="input[name=name]" onClose={() => setFolderModal(false)}><form className="form-body" onSubmit={(event) => void createFolder(event)}><label>Nama folder<input name="name" maxLength={60} required placeholder="Misalnya: Tools" /></label><label>Folder induk<select name="parentFolderId" value={folderModalParentId} onChange={(event) => setFolderModalParentId(event.target.value)}><option value="">Koleksi</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select></label><IconPicker iconName={folderIconName} iconAssetId={folderIconAssetId} iconUrl={folderIconUrl} assets={iconAssets} onSelect={selectFolderBuiltinIcon} onSelectUrl={selectFolderIconUrl} onUpload={uploadFolderIcon} onDelete={(asset) => void deleteIcon(asset)} clearLabel="Hapus ikon dari folder" />{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" onClick={() => setFolderModal(false)}>Batal</button><button className="button primary" type="submit">Simpan</button></footer></form></Modal>}
