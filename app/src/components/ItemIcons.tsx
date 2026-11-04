@@ -39,9 +39,10 @@ type IconPickerProps = {
   onSelectUrl: (url: string) => void
   onUpload: (file: File) => Promise<void>
   onDelete: (asset: IconAsset) => void
+  clearLabel?: string
 }
 
-export function IconPicker({ iconName, iconAssetId, iconUrl, assets, onSelect, onSelectUrl, onUpload, onDelete }: IconPickerProps) {
+export function IconPicker({ iconName, iconAssetId, iconUrl, assets, onSelect, onSelectUrl, onUpload, onDelete, clearLabel = 'Hapus ikon dari catatan' }: IconPickerProps) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'builtin' | 'upload' | 'saved' | 'url'>('builtin')
   const [query, setQuery] = useState('')
@@ -107,7 +108,7 @@ export function IconPicker({ iconName, iconAssetId, iconUrl, assets, onSelect, o
         {!assets.length && <p className="icon-empty">Belum ada ikon upload.</p>}
       </div>}
       {tab === 'url' && <div className="icon-url-panel"><label htmlFor="icon-url">URL gambar</label><div className="icon-url-row"><input id="icon-url" type="url" inputMode="url" maxLength={2048} value={urlValue} onChange={(event) => { setUrlValue(event.target.value); setUploadError('') }} placeholder="https://contoh.com/icon.png" /><button className="button" type="button" onClick={() => { try { const parsed = new URL(urlValue.trim()); if (parsed.protocol !== 'https:') throw new Error(); onSelectUrl(parsed.href); setUploadError('') } catch { setUploadError('Masukkan URL gambar HTTPS yang valid.') } }}>Pakai URL</button></div>{uploadError && <p className="modal-error" role="alert">{uploadError}</p>}</div>}
-      <button className="link-button icon-clear" type="button" onClick={() => { onSelect('', ''); onSelectUrl('') }}>Hapus ikon dari catatan</button>
+      <button className="link-button icon-clear" type="button" onClick={() => { onSelect('', ''); onSelectUrl('') }}>{clearLabel}</button>
     </div>}
   </section>
 }

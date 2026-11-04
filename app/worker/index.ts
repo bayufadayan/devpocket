@@ -20,7 +20,8 @@ type NoteRow = {
   created_at: string
   updated_at: string
 }
-type FolderRow = { id: string; name: string; parent_id: string | null; item_count: number; child_count: number; is_pinned: number; is_system: number; created_at: string }
+type FolderRow = { id: string; name: string; parent_id: string | null; item_count: number; child_count: number; is_pinned: number; is_system: number; icon_name: string | null; icon_asset_id: string | null; icon_url: string | null; created_at: string }
+type FolderIconInput = { iconName?: unknown; iconAssetId?: unknown; iconUrl?: unknown }
 type IconAssetRow = {
   id: string
   object_key: string
@@ -77,6 +78,21 @@ function isSecureImageUrl(value: string) {
   try { return new URL(value).protocol === 'https:' } catch { return false }
 }
 
+function folderIconInput(body: FolderIconInput, current?: Pick<FolderRow, 'icon_name' | 'icon_asset_id' | 'icon_url'>) {
+  const iconName = typeof body.iconName === 'string' ? body.iconName.trim() : current?.icon_name ?? ''
+  const iconAssetId = typeof body.iconAssetId === 'string' ? body.iconAssetId.trim() : current?.icon_asset_id ?? ''
+  const iconUrl = typeof body.iconUrl === 'string' ? body.iconUrl.trim() : current?.icon_url ?? ''
+  return { iconName: iconName || null, iconAssetId: iconAssetId || null, iconUrl: iconUrl || null }
+}
+
+async function validateFolderIcon(db: D1Database, icon: ReturnType<typeof folderIconInput>) {
+  if (icon.iconName && !validIconNames.has(icon.iconName)) return 'Ikon bawaan tidak dikenal.'
+  if ([Boolean(icon.iconName), Boolean(icon.iconAssetId), Boolean(icon.iconUrl)].filter(Boolean).length > 1) return 'Pilih satu sumber ikon.'
+  if (icon.iconAssetId && !await db.prepare('SELECT id FROM icon_assets WHERE id = ?').bind(icon.iconAssetId).first()) return 'Ikon upload tidak ditemukan.'
+  if (icon.iconUrl && (icon.iconUrl.length > 2048 || !isSecureImageUrl(icon.iconUrl))) return 'URL ikon harus HTTPS dan maksimal 2048 karakter.'
+  return null
+}
+
 async function readNote(db: D1Database, id: string) {
   return db.prepare(`
     SELECT n.id, n.title, n.content, n.source_url, n.platform, n.folder_id,
@@ -99,10 +115,9 @@ app.get('/api/ai/status', (c) => c.json({ configured: Boolean(c.env.GEMINI_API_K
 app.get('/api/icons', async (c) => {
   const { results } = await c.env.DB.prepare(`
     SELECT a.id, a.name, a.content_type, a.byte_size,
-           COUNT(n.id) AS used_count
+           (SELECT COUNT(*) FROM notes n WHERE n.icon_asset_id = a.id) +
+           (SELECT COUNT(*) FROM folders f WHERE f.icon_asset_id = a.id) AS used_count
     FROM icon_assets a
-    LEFT JOIN notes n ON n.icon_asset_id = a.id
-    GROUP BY a.id
     ORDER BY a.created_at DESC, a.id DESC
   `).all<Omit<IconAssetRow, 'object_key'>>()
   return c.json(results.map((asset) => ({ ...asset, url: `/api/icons/${asset.id}/image` })))
@@ -155,12 +170,13 @@ app.get('/api/icons/:id/image', async (c) => {
 
 app.delete('/api/icons/:id', async (c) => {
   const asset = await c.env.DB.prepare(`
-    SELECT a.object_key, COUNT(n.id) AS used_count
-    FROM icon_assets a LEFT JOIN notes n ON n.icon_asset_id = a.id
-    WHERE a.id = ? GROUP BY a.id
+    SELECT a.object_key,
+           (SELECT COUNT(*) FROM notes n WHERE n.icon_asset_id = a.id) +
+           (SELECT COUNT(*) FROM folders f WHERE f.icon_asset_id = a.id) AS used_count
+    FROM icon_assets a WHERE a.id = ?
   `).bind(c.req.param('id')).first<{ object_key: string; used_count: number }>()
   if (!asset) return c.json({ error: 'Ikon tidak ditemukan.' }, 404)
-  if (asset.used_count > 0) return c.json({ error: 'Ikon masih dipakai catatan.' }, 409)
+  if (asset.used_count > 0) return c.json({ error: 'Ikon masih dipakai item atau folder.' }, 409)
   if (!c.env.ICONS) return c.json({ error: 'Penyimpanan ikon belum disiapkan.' }, 503)
   await c.env.ICONS.delete(asset.object_key)
   await c.env.DB.prepare('DELETE FROM icon_assets WHERE id = ?').bind(c.req.param('id')).run()
@@ -210,7 +226,7 @@ app.post('/api/ai/search', async (c) => {
 
 app.get('/api/folders', async (c) => {
   const { results } = await c.env.DB.prepare(`
-    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.created_at, COUNT(n.id) AS item_count,
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at, COUNT(n.id) AS item_count,
            (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
     FROM folders f
     LEFT JOIN notes n ON n.folder_id = f.id
@@ -222,46 +238,57 @@ app.get('/api/folders', async (c) => {
 })
 
 app.post('/api/folders', async (c) => {
-  const body = await c.req.json<{ name?: unknown; parentFolderId?: unknown }>().catch(() => ({} as { name?: unknown; parentFolderId?: unknown }))
+  const body = await c.req.json<{ name?: unknown; parentFolderId?: unknown } & FolderIconInput>().catch(() => ({} as { name?: unknown; parentFolderId?: unknown } & FolderIconInput))
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const parentFolderId = typeof body.parentFolderId === 'string' && body.parentFolderId ? body.parentFolderId : null
+  const icon = folderIconInput(body)
   if (!name || name.length > 60) return c.json({ error: 'Nama folder harus 1–60 karakter.' }, 400)
+  const iconError = await validateFolderIcon(c.env.DB, icon)
+  if (iconError) return c.json({ error: iconError }, 400)
   if (parentFolderId && !await c.env.DB.prepare('SELECT id FROM folders WHERE id = ?').bind(parentFolderId).first()) {
     return c.json({ error: 'Folder induk tidak ditemukan.' }, 404)
   }
 
   const id = crypto.randomUUID()
   try {
-    await c.env.DB.prepare('INSERT INTO folders (id, name, parent_id) VALUES (?, ?, ?)').bind(id, name, parentFolderId).run()
+    await c.env.DB.prepare(`
+      INSERT INTO folders (id, name, parent_id, icon_name, icon_asset_id, icon_url)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(id, name, parentFolderId, icon.iconName, icon.iconAssetId, icon.iconUrl).run()
   } catch (cause) {
     if (String(cause).toLowerCase().includes('unique')) return c.json({ error: 'Folder dengan nama itu sudah ada.' }, 409)
     throw cause
   }
 
   const folder = await c.env.DB.prepare(`
-    SELECT id, name, parent_id, is_pinned, is_system, created_at, 0 AS item_count, 0 AS child_count FROM folders WHERE id = ?
+    SELECT id, name, parent_id, is_pinned, is_system, icon_name, icon_asset_id, icon_url, created_at, 0 AS item_count, 0 AS child_count FROM folders WHERE id = ?
   `).bind(id).first<FolderRow>()
   return c.json(folder, 201)
 })
 
 app.patch('/api/folders/:id', async (c) => {
   const id = c.req.param('id')
-  const current = await c.env.DB.prepare('SELECT id, is_system FROM folders WHERE id = ?').bind(id).first<{ id: string; is_system: number }>()
+  const current = await c.env.DB.prepare('SELECT id, is_system, icon_name, icon_asset_id, icon_url FROM folders WHERE id = ?').bind(id).first<{ id: string; is_system: number; icon_name: string | null; icon_asset_id: string | null; icon_url: string | null }>()
   if (!current) return c.json({ error: 'Folder tidak ditemukan.' }, 404)
   if (current.is_system) return c.json({ error: 'Folder Draft tidak bisa diganti namanya.' }, 400)
-  const body = await c.req.json<{ name?: unknown }>().catch(() => ({} as { name?: unknown }))
+  const body = await c.req.json<{ name?: unknown } & FolderIconInput>().catch(() => ({} as { name?: unknown } & FolderIconInput))
   const name = typeof body.name === 'string' ? body.name.trim() : ''
+  const icon = folderIconInput(body, current)
   if (!name || name.length > 60) return c.json({ error: 'Nama folder harus 1–60 karakter.' }, 400)
+  const iconError = await validateFolderIcon(c.env.DB, icon)
+  if (iconError) return c.json({ error: iconError }, 400)
 
   try {
-    await c.env.DB.prepare('UPDATE folders SET name = ? WHERE id = ?').bind(name, id).run()
+    await c.env.DB.prepare(`
+      UPDATE folders SET name = ?, icon_name = ?, icon_asset_id = ?, icon_url = ? WHERE id = ?
+    `).bind(name, icon.iconName, icon.iconAssetId, icon.iconUrl, id).run()
   } catch (cause) {
     if (String(cause).toLowerCase().includes('unique')) return c.json({ error: 'Folder dengan nama itu sudah ada.' }, 409)
     throw cause
   }
 
   return c.json(await c.env.DB.prepare(`
-    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.created_at,
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at,
            (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id) AS item_count,
            (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
     FROM folders f WHERE f.id = ?
@@ -323,7 +350,7 @@ app.patch('/api/folders/:id/pin', async (c) => {
   if (typeof body.pinned !== 'boolean') return c.json({ error: 'Status sematan tidak valid.' }, 400)
   await c.env.DB.prepare('UPDATE folders SET is_pinned = ? WHERE id = ?').bind(body.pinned ? 1 : 0, id).run()
   return c.json(await c.env.DB.prepare(`
-    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.created_at,
+    SELECT f.id, f.name, f.parent_id, f.is_pinned, f.is_system, f.icon_name, f.icon_asset_id, f.icon_url, f.created_at,
            (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id) AS item_count,
            (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
     FROM folders f WHERE f.id = ?

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react'
 import { api } from './api'
 import { MarkdownContent } from './components/MarkdownContent'
+import { BuiltinIcon } from './components/BuiltinIcon'
 import { IconPicker, NoteIcon } from './components/ItemIcons'
 import type { CollectionLayout, CollectionTab, CollectionView, Folder, IconAsset, Note, NoteInput, NoteUsage } from './types'
 import './App.css'
@@ -118,6 +119,13 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
 
+function FolderWatermark({ folder }: { folder: Folder }) {
+  const imageUrl = folder.icon_url || (folder.icon_asset_id ? `/api/icons/${encodeURIComponent(folder.icon_asset_id)}/image` : '')
+  if (imageUrl) return <span className="folder-watermark" aria-hidden="true"><img src={imageUrl} alt="" referrerPolicy="no-referrer" loading="lazy" /></span>
+  if (folder.icon_name) return <span className="folder-watermark" aria-hidden="true"><BuiltinIcon name={folder.icon_name} size={116} /></span>
+  return null
+}
+
 function App() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [notes, setNotes] = useState<Note[]>([])
@@ -137,6 +145,9 @@ function App() {
   const [editor, setEditor] = useState<EditorState>(null)
   const [folderModal, setFolderModal] = useState(false)
   const [folderModalParentId, setFolderModalParentId] = useState('')
+  const [folderIconName, setFolderIconName] = useState('')
+  const [folderIconAssetId, setFolderIconAssetId] = useState('')
+  const [folderIconUrl, setFolderIconUrl] = useState('')
   const [folderMenuId, setFolderMenuId] = useState<string | null>(null)
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null)
   const [folderNameDraft, setFolderNameDraft] = useState('')
@@ -432,16 +443,30 @@ function App() {
       setToast('Tersimpan'); await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menyimpan. Coba lagi.') }
   }
+  function startCreateFolder(parentId: string) {
+    setError('')
+    setFolderModalParentId(parentId)
+    setFolderIconName('')
+    setFolderIconAssetId('')
+    setFolderIconUrl('')
+    setFolderModal(true)
+  }
   async function createFolder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    try { await api.createFolder(String(form.get('name') ?? '').trim(), String(form.get('parentFolderId') ?? '') || null); setFolderModal(false); setToast('Folder ditambahkan'); await refresh() }
+    try {
+      await api.createFolder(String(form.get('name') ?? '').trim(), String(form.get('parentFolderId') ?? '') || null, folderIconName, folderIconAssetId, folderIconUrl)
+      setFolderModal(false); setToast('Folder ditambahkan'); await refresh()
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menambah folder.') }
   }
   function startRenameFolder(folder: Folder) {
     setFolderMenuId(null)
     setError('')
     setFolderNameDraft(folder.name)
+    setFolderIconName(folder.icon_name ?? '')
+    setFolderIconAssetId(folder.icon_asset_id ?? '')
+    setFolderIconUrl(folder.icon_url ?? '')
     setEditingFolder(folder)
   }
   async function saveFolderName(event: FormEvent<HTMLFormElement>) {
@@ -450,10 +475,10 @@ function App() {
     setFolderActionBusy(true)
     setError('')
     try {
-      const updated = await api.renameFolder(editingFolder.id, folderNameDraft.trim())
+      const updated = await api.updateFolder(editingFolder.id, folderNameDraft.trim(), folderIconName, folderIconAssetId, folderIconUrl)
       setFolders((current) => current.map((folder) => folder.id === updated.id ? updated : folder))
       setEditingFolder(null)
-      setToast('Nama folder diperbarui')
+      setToast('Folder diperbarui')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal mengganti nama folder.') }
     finally { setFolderActionBusy(false) }
   }
@@ -475,17 +500,26 @@ function App() {
     setIconName(''); setIconAssetId(asset.id); setIconUrl('')
     setToast('Ikon tersimpan')
   }
+  async function uploadFolderIcon(file: File) {
+    const asset = await api.uploadIcon(file)
+    setIconAssets((current) => [asset, ...current])
+    setFolderIconName(''); setFolderIconAssetId(asset.id); setFolderIconUrl('')
+    setToast('Ikon tersimpan')
+  }
   async function deleteIcon(asset: IconAsset) {
     if (asset.used_count || !window.confirm(`Hapus ikon “${asset.name}”?`)) return
     try {
       await api.deleteIcon(asset.id)
       setIconAssets((current) => current.filter((item) => item.id !== asset.id))
       if (iconAssetId === asset.id) setIconAssetId('')
+      if (folderIconAssetId === asset.id) { setFolderIconName(''); setFolderIconAssetId(''); setFolderIconUrl('') }
       setToast('Ikon dihapus')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menghapus ikon.') }
   }
   function selectBuiltinIcon(name: string, assetId: string) { setIconName(name); setIconAssetId(assetId); setIconUrl('') }
   function selectIconUrl(url: string) { setIconName(''); setIconAssetId(''); setIconUrl(url) }
+  function selectFolderBuiltinIcon(name: string, assetId: string) { setFolderIconName(name); setFolderIconAssetId(assetId); setFolderIconUrl('') }
+  function selectFolderIconUrl(url: string) { setFolderIconName(''); setFolderIconAssetId(''); setFolderIconUrl(url) }
   async function removeNote(note: Note) {
     if (!window.confirm(`Hapus “${note.title}”?`)) return
     try { await api.deleteNote(note.id); closeNoteModal(); setToast('Dihapus'); await refresh() }
@@ -524,8 +558,8 @@ function App() {
 
   function FolderCard({ folder }: { folder: Folder }) {
     return <div className="folder-wrap">
-      <button className={`folder-card${folder.is_system ? ' draft-folder' : ''}`} onClick={() => { setFolderMenuId(null); navigateToFolder(folder.id) }}><span className="folder-icon"><Icon name="folder" /></span><strong>{folder.name}</strong><span>{folderItemCounts.get(folder.id) ?? folder.item_count} item{folder.child_count ? ` · ${folder.child_count} folder` : ''}</span></button>
-      {!folder.is_system && <div className="folder-menu-wrap"><button className="folder-menu-trigger" aria-label={`Menu ${folder.name}`} aria-expanded={folderMenuId === folder.id} title={`Menu ${folder.name}`} onClick={() => setFolderMenuId((current) => current === folder.id ? null : folder.id)}><Icon name="more" size={18} /></button>{folderMenuId === folder.id && <div className="folder-menu"><button onClick={() => startRenameFolder(folder)}><Icon name="edit" size={15} />Ganti nama</button><button className="folder-menu-delete" onClick={() => { setFolderMenuId(null); setError(''); setFolderToDelete(folder) }}><Icon name="trash" size={15} />Hapus folder</button></div>}</div>}
+      <button className={`folder-card${folder.is_system ? ' draft-folder' : ''}`} onClick={() => { setFolderMenuId(null); navigateToFolder(folder.id) }}><FolderWatermark folder={folder} /><span className="folder-icon"><Icon name="folder" /></span><strong>{folder.name}</strong><span>{folderItemCounts.get(folder.id) ?? folder.item_count} item{folder.child_count ? ` · ${folder.child_count} folder` : ''}</span></button>
+      {!folder.is_system && <div className="folder-menu-wrap"><button className="folder-menu-trigger" aria-label={`Menu ${folder.name}`} aria-expanded={folderMenuId === folder.id} title={`Menu ${folder.name}`} onClick={() => setFolderMenuId((current) => current === folder.id ? null : folder.id)}><Icon name="more" size={18} /></button>{folderMenuId === folder.id && <div className="folder-menu"><button onClick={() => startRenameFolder(folder)}><Icon name="edit" size={15} />Edit folder</button><button className="folder-menu-delete" onClick={() => { setFolderMenuId(null); setError(''); setFolderToDelete(folder) }}><Icon name="trash" size={15} />Hapus folder</button></div>}</div>}
       <button className={`folder-pin${folder.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleFolderPinned(folder)} aria-label={folder.is_pinned ? `Lepas sematan ${folder.name}` : `Sematkan ${folder.name}`} title={folder.is_pinned ? 'Lepas sematan folder' : 'Sematkan folder'}><Icon name="star" size={17} filled={Boolean(folder.is_pinned)} /></button>
       <button className="folder-add" onClick={() => openNew(folder.id)} aria-label={`Tambah catatan ke ${folder.name}`} title={`Tambah catatan ke ${folder.name}`}><Icon name="plus" size={16} /></button>
     </div>
@@ -558,9 +592,9 @@ function App() {
 
       <section className="section-head"><h1>{pageTitle}</h1><span className="count-label">{openFolder ? folderItemCounts.get(openFolder) ?? folderNotes.length : filtered.length} item</span></section>
 
-      {!openFolder && <div className="view-tools"><div className="segmented" role="group" aria-label="Tampilan koleksi"><button className={view === 'folders' ? 'selected' : ''} aria-pressed={view === 'folders'} onClick={() => setView('folders')} title="Folder"><Icon name="folder" /></button><button className={view === 'items' ? 'selected' : ''} aria-pressed={view === 'items'} onClick={() => setView('items')} title="Semua item"><Icon name="grid" /></button></div>{view === 'folders' && <button className="button" onClick={() => { setError(''); setFolderModalParentId(''); setFolderModal(true) }}><Icon name="plus" />Tambah folder</button>}{view === 'items' && <div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew()} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div>}</div>}
+      {!openFolder && <div className="view-tools"><div className="segmented" role="group" aria-label="Tampilan koleksi"><button className={view === 'folders' ? 'selected' : ''} aria-pressed={view === 'folders'} onClick={() => setView('folders')} title="Folder"><Icon name="folder" /></button><button className={view === 'items' ? 'selected' : ''} aria-pressed={view === 'items'} onClick={() => setView('items')} title="Semua item"><Icon name="grid" /></button></div>{view === 'folders' && <button className="button" onClick={() => startCreateFolder('')}><Icon name="plus" />Tambah folder</button>}{view === 'items' && <div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew()} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div>}</div>}
 
-      {openFolder && <div className="folder-view-tools">{currentFolder && <button className="button" onClick={() => { setError(''); setFolderModalParentId(currentFolder.id); setFolderModal(true) }}><Icon name="plus" />Tambah subfolder</button>}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew(currentFolder?.id ?? null)} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div>}
+      {openFolder && <div className="folder-view-tools">{currentFolder && <button className="button" onClick={() => startCreateFolder(currentFolder.id)}><Icon name="plus" />Tambah subfolder</button>}<div className="layout-tools"><button className={layout === 'standard' ? 'selected' : ''} onClick={() => setLayout('standard')} aria-label="Tampilan standar" title="Standar"><Icon name="list" /></button><button className={layout === 'compare' ? 'selected' : ''} onClick={() => setLayout('compare')} aria-label="Tampilan compare" title="Compare"><Icon name="columns" /></button><button className="add-icon" onClick={() => openNew(currentFolder?.id ?? null)} aria-label="Tambah catatan" title="Tambah catatan"><Icon name="plus" /></button></div></div>}
 
       {loading ? <p className="empty-state">Memuat...</p> : openFolder ? <div className="folder-page">
         {folderChildren.length > 0 && <div className="folder-grid">{folderChildren.map((folder) => <FolderCard key={folder.id} folder={folder} />)}</div>}
@@ -570,9 +604,9 @@ function App() {
       </div> : layout === 'standard' ? <><div ref={tabsSentinel} className="sticky-sentinel" aria-hidden="true" /><div className={`sticky-tabs${tabsStuck ? ' is-stuck' : ''}`}><nav className="status-tabs" aria-label="Filter status">{tabOptions.map((option) => <button key={option.id} className={tab === option.id ? 'active' : ''} aria-pressed={tab === option.id} onClick={() => setTab(option.id)}>{option.label}</button>)}</nav>{tabsStuck && <button className="button primary sticky-add" onClick={() => openNew()}><Icon name="plus" /><span>Tambah catatan</span></button>}</div><div className="items-grid">{activeItems.map((note) => <NoteCard key={note.id} note={note} showFolder />)}{!activeItems.length && <p className="empty-state">{aiResults ? 'Tidak ada catatan yang mirip' : query ? 'Tidak ada yang cocok' : 'Belum ada catatan'}</p>}</div></> : <CompareBoard items={filtered} />}
     </main>
 
-    {folderModal && <Modal title={folderModalParentId ? 'Tambah subfolder' : 'Tambah folder'} initialFocusSelector="input[name=name]" onClose={() => setFolderModal(false)}><form className="form-body" onSubmit={(event) => void createFolder(event)}><label>Nama folder<input name="name" maxLength={60} required placeholder="Misalnya: Tools" /></label><label>Folder induk<select name="parentFolderId" value={folderModalParentId} onChange={(event) => setFolderModalParentId(event.target.value)}><option value="">Koleksi</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select></label>{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" onClick={() => setFolderModal(false)}>Batal</button><button className="button primary" type="submit">Simpan</button></footer></form></Modal>}
+    {folderModal && <Modal title={folderModalParentId ? 'Tambah subfolder' : 'Tambah folder'} initialFocusSelector="input[name=name]" onClose={() => setFolderModal(false)}><form className="form-body" onSubmit={(event) => void createFolder(event)}><label>Nama folder<input name="name" maxLength={60} required placeholder="Misalnya: Tools" /></label><label>Folder induk<select name="parentFolderId" value={folderModalParentId} onChange={(event) => setFolderModalParentId(event.target.value)}><option value="">Koleksi</option>{folders.map((folder) => <option value={folder.id} key={folder.id}>{folderPaths.get(folder.id) ?? folder.name}</option>)}</select></label><IconPicker iconName={folderIconName} iconAssetId={folderIconAssetId} iconUrl={folderIconUrl} assets={iconAssets} onSelect={selectFolderBuiltinIcon} onSelectUrl={selectFolderIconUrl} onUpload={uploadFolderIcon} onDelete={(asset) => void deleteIcon(asset)} clearLabel="Hapus ikon dari folder" />{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" onClick={() => setFolderModal(false)}>Batal</button><button className="button primary" type="submit">Simpan</button></footer></form></Modal>}
 
-    {editingFolder && <Modal title="Ganti nama folder" initialFocusSelector="input[name=name]" onClose={() => { if (!folderActionBusy) setEditingFolder(null) }}><form className="form-body" onSubmit={(event) => void saveFolderName(event)}><label>Nama folder<input name="name" value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} maxLength={60} required /></label>{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setEditingFolder(null)}>Batal</button><button className="button primary" type="submit" disabled={folderActionBusy}>{folderActionBusy ? 'Menyimpan…' : 'Simpan'}</button></footer></form></Modal>}
+    {editingFolder && <Modal title="Edit folder" initialFocusSelector="input[name=name]" onClose={() => { if (!folderActionBusy) setEditingFolder(null) }}><form className="form-body" onSubmit={(event) => void saveFolderName(event)}><label>Nama folder<input name="name" value={folderNameDraft} onChange={(event) => setFolderNameDraft(event.target.value)} maxLength={60} required /></label><IconPicker iconName={folderIconName} iconAssetId={folderIconAssetId} iconUrl={folderIconUrl} assets={iconAssets} onSelect={selectFolderBuiltinIcon} onSelectUrl={selectFolderIconUrl} onUpload={uploadFolderIcon} onDelete={(asset) => void deleteIcon(asset)} clearLabel="Hapus ikon dari folder" />{error && <p className="modal-error" role="alert">{error}</p>}<footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setEditingFolder(null)}>Batal</button><button className="button primary" type="submit" disabled={folderActionBusy}>{folderActionBusy ? 'Menyimpan…' : 'Simpan'}</button></footer></form></Modal>}
 
     {folderToDelete && <Modal title="Hapus folder" onClose={() => { if (!folderActionBusy) setFolderToDelete(null) }}><div className="delete-folder-dialog"><div><strong>Hapus “{folderToDelete.name}”?</strong><p>Pilih apa yang dilakukan dengan item dan subfolder di dalamnya.</p></div>{error && <p className="modal-error" role="alert">{error}</p>}<div className="delete-folder-options"><button className="button" type="button" disabled={folderActionBusy} onClick={() => void deleteFolderContents('draft')}><span><strong>Pindahkan ke Draft</strong><small>Item dan subfolder tetap tersimpan di Draft.</small></span></button><button className="button danger" type="button" disabled={folderActionBusy} onClick={() => void deleteFolderContents('delete')}><span><strong>{folderActionBusy ? 'Menghapus…' : 'Hapus semua'}</strong><small>Folder, subfolder, dan semua item dihapus permanen.</small></span></button></div><footer className="form-actions"><button className="button" type="button" disabled={folderActionBusy} onClick={() => setFolderToDelete(null)}>Batal</button></footer></div></Modal>}
 

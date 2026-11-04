@@ -21,13 +21,13 @@ export const api = {
   getNotes: () => request<Note[]>('/api/notes'),
   getIcons: () => request<IconAsset[]>('/api/icons'),
   getAiStatus: () => request<{ configured: boolean }>('/api/ai/status'),
-  createFolder: (name: string, parentFolderId: string | null) => request<Folder>('/api/folders', {
+  createFolder: (name: string, parentFolderId: string | null, iconName: string, iconAssetId: string, iconUrl: string) => request<Folder>('/api/folders', {
     method: 'POST',
-    body: JSON.stringify({ name, parentFolderId }),
+    body: JSON.stringify({ name, parentFolderId, iconName, iconAssetId, iconUrl }),
   }),
-  renameFolder: (id: string, name: string) => request<Folder>(`/api/folders/${id}`, {
+  updateFolder: (id: string, name: string, iconName: string, iconAssetId: string, iconUrl: string) => request<Folder>(`/api/folders/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, iconName, iconAssetId, iconUrl }),
   }),
   deleteFolder: (id: string, contents: 'draft' | 'delete') => request<void>(`/api/folders/${id}`, {
     method: 'DELETE',

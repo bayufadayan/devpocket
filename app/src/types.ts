@@ -12,6 +12,9 @@ export interface Folder {
   child_count: number
   is_pinned: number
   is_system: number
+  icon_name: string | null
+  icon_asset_id: string | null
+  icon_url: string | null
   created_at: string
 }
 

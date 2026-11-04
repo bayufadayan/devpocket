@@ -59,9 +59,13 @@
 .layout-tools button.add-icon { margin-left: 5px; border-left: 1px solid var(--border); padding-left: 10px; border-radius: 0 7px 7px 0; color: var(--accent); }
 .folder-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; min-height: max(100vh, 560px); align-content: start; }
 .folder-card, .folder-wrap { min-width: 0; }
-.folder-card { position: relative; width: 100%; min-height: 138px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; padding: 18px 16px; border: 1px solid #d9d6ce; border-radius: 13px; background: var(--surface); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.folder-card { position: relative; isolation: isolate; overflow: hidden; width: 100%; min-height: 138px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; padding: 18px 16px; border: 1px solid #d9d6ce; border-radius: 13px; background: var(--surface); cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 .folder-card:hover { border-color: #b8b4aa; background: #f0eee8; }
 .folder-card.draft-folder { background: #ebe7dc; border-color: #d5d0c5; }
+.folder-watermark { position: absolute; z-index: 0; right: 8px; bottom: 0; width: 124px; height: 124px; display: grid; place-items: center; color: var(--accent); opacity: .12; pointer-events: none; }
+.folder-watermark svg, .folder-watermark img { display: block; max-width: 100%; max-height: 100%; }
+.folder-watermark img { width: 100%; height: 100%; object-fit: contain; }
+.folder-card > :not(.folder-watermark) { position: relative; z-index: 1; }
 .folder-icon { width: 34px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--accent); background: #e7ebfa; margin-bottom: 2px; }
 .folder-card strong { font-size: 16px; font-weight: 650; }
 .folder-card > span:last-child { color: var(--muted); font-size: 13px; }
@@ -224,6 +228,7 @@
   .folder-card { min-height: 126px; padding: 14px 12px; }
   .folder-card strong { font-size: 14px; }
   .folder-card > span:last-child { font-size: 12px; }
+  .folder-watermark { right: 4px; width: 100px; height: 100px; }
   .folder-wrap .folder-card { padding-right: 92px; }
   .folder-view-tools { margin-bottom: 12px; }
   .folder-add { right: 7px; bottom: 7px; width: 32px; height: 32px; }
