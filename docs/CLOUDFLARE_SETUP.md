@@ -6,7 +6,7 @@
 - D1 database: `devpocket` (primary location hint: Asia Pacific)
 - D1 migrations `0001_initial_schema.sql` through `0004_draft_as_folder.sql`: applied
 - R2 bucket `devpocket-icons`: created (Standard, Asia Pacific)
-- Latest Worker version: deployed `a0e24ad5-4269-4edd-8fff-03526714e7e7` (nested folders, pins, and URL icons)
+- Latest Worker version: deployed `1b0f0b05-2fd1-41f3-8197-a0f9ea792237` (nested folders, pins, URL icons, and folder spacing)
 - Production URL: https://devpocket.fadayan.workers.dev
 - PWA: manifest, install icons, install button, and app-shell service worker are enabled
 - Cloudflare Access: enabled for all Worker traffic; unauthenticated requests to both `/` and `/api/health` redirect to Access
