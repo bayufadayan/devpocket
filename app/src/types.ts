@@ -7,7 +7,11 @@ export type CollectionView = 'folders' | 'items'
 export interface Folder {
   id: string
   name: string
+  parent_id: string | null
   item_count: number
+  child_count: number
+  is_pinned: number
+  is_system: number
   created_at: string
 }
 
@@ -23,6 +27,8 @@ export interface Note {
   usage: NoteUsage | null
   icon_name: string | null
   icon_asset_id: string | null
+  icon_url: string | null
+  is_pinned: number
   created_at: string
   updated_at: string
 }
@@ -40,9 +46,9 @@ export interface NoteInput {
   title: string
   content: string
   sourceUrl: string
-  destination: NoteStatus
   folderId: string
   usage: NoteUsage | ''
   iconName: string
   iconAssetId: string
+  iconUrl: string
 }

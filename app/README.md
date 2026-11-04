@@ -10,7 +10,7 @@ npm run db:migrate:local
 npm run dev
 ```
 
-The migration creates the local database under `.wrangler/state`. The app does not need Cloudflare credentials for local development.
+The migrations create the local database under `.wrangler/state`. Draft is a system folder at the top of the collection; folders can be nested, and each item belongs to one folder. The app does not need Cloudflare credentials for local development.
 
 AI capture and semantic search use the Gemini API. To enable them locally, copy `.dev.vars.example` to `.dev.vars` and add a Gemini API key. Keep `.dev.vars` private; it is ignored by Git. AI calls stay on the Worker and the key is not sent to the browser.
 

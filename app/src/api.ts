@@ -1,4 +1,4 @@
-import type { Folder, IconAsset, Note, NoteInput, NoteUsage } from './types'
+import type { Folder, IconAsset, Note, NoteInput } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
@@ -21,9 +21,13 @@ export const api = {
   getNotes: () => request<Note[]>('/api/notes'),
   getIcons: () => request<IconAsset[]>('/api/icons'),
   getAiStatus: () => request<{ configured: boolean }>('/api/ai/status'),
-  createFolder: (name: string) => request<Folder>('/api/folders', {
+  createFolder: (name: string, parentFolderId: string | null) => request<Folder>('/api/folders', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, parentFolderId }),
+  }),
+  pinFolder: (id: string, pinned: boolean) => request<Folder>(`/api/folders/${id}/pin`, {
+    method: 'PATCH',
+    body: JSON.stringify({ pinned }),
   }),
   createNote: (input: NoteInput) => request<Note>('/api/notes', {
     method: 'POST',
@@ -33,9 +37,9 @@ export const api = {
     method: 'PATCH',
     body: JSON.stringify(input),
   }),
-  moveNote: (id: string, destination: 'draft' | 'collection', usage?: NoteUsage) => request<Note>(`/api/notes/${id}`, {
+  pinNote: (id: string, pinned: boolean) => request<Note>(`/api/notes/${id}/pin`, {
     method: 'PATCH',
-    body: JSON.stringify({ destination, usage }),
+    body: JSON.stringify({ pinned }),
   }),
   deleteNote: (id: string) => request<void>(`/api/notes/${id}`, { method: 'DELETE' }),
   uploadIcon: (file: File) => {

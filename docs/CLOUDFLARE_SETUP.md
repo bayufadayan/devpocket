@@ -5,6 +5,7 @@
 - Cloudflare Worker: `devpocket`
 - D1 database: `devpocket` (primary location hint: Asia Pacific)
 - D1 migrations `0001_initial_schema.sql` and `0002_note_icons.sql`: applied
+- Migrations `0003_nested_folders_and_pins.sql` and `0004_draft_as_folder.sql`: local only; apply both to production before deploying the latest app code
 - R2 bucket `devpocket-icons`: created (Standard, Asia Pacific)
 - Latest Worker version: deployed `a2930700-8ec6-41a0-b212-00206fe745b4` (PWA support)
 - Production URL: https://devpocket.fadayan.workers.dev
@@ -30,6 +31,8 @@ The service worker caches the app shell and static assets only. Notes and API re
 - Local database: `npm run db:migrate:local`
 - Production D1: `npm run db:migrate:remote`
 - Production build and deploy: `npm run deploy` (keeps the Access policy in place)
+
+For the folder/pin update, run `npm run db:migrate:remote` before `npm run deploy`. Migration 0004 moves existing Draft notes into the new system Draft folder while preserving note content and metadata.
 
 Do not use `--remote` for local database work. Production uses a separate D1 binding in the `production` environment.
 
