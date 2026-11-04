@@ -41,6 +41,12 @@ function folderRoutePath(folders: Folder[], folderId: string | null) {
   return segments.length ? `/folders/${segments.join('/')}` : '/'
 }
 
+function pushHistoryEntry(url: URL, state: Record<string, unknown>, scrollY = window.scrollY) {
+  const currentState = window.history.state && typeof window.history.state === 'object' ? window.history.state as Record<string, unknown> : {}
+  window.history.replaceState({ ...currentState, devpocketScrollY: window.scrollY }, '')
+  window.history.pushState({ ...currentState, ...state, devpocketScrollY: scrollY }, '', url)
+}
+
 function Icon({ name, size = 18, filled = false }: { name: 'folder' | 'grid' | 'list' | 'columns' | 'plus' | 'search' | 'filter' | 'close' | 'back' | 'external' | 'edit' | 'trash' | 'sparkles' | 'install' | 'star' | 'more'; size?: number; filled?: boolean }) {
   const paths: Record<string, ReactNode> = {
     folder: <><path d="M3 6.5h6l2 2h10v10.8H3z"/><path d="M3 9h18"/></>,
@@ -211,14 +217,31 @@ function App() {
   useEffect(() => { localStorage.setItem('devpocket-layout', layout) }, [layout])
   useEffect(() => { localStorage.setItem('devpocket-tab', tab) }, [tab])
   useEffect(() => {
-    const syncRoute = () => {
+    const previousScrollRestoration = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    let firstFrame = 0
+    let secondFrame = 0
+    const syncRoute = (event: PopStateEvent) => {
       const route = readAppRoute()
       setOpenFolder(route.folderId)
       setPendingNoteId(route.noteId)
       setEditor(null)
+      const scrollY = (event.state as { devpocketScrollY?: unknown } | null)?.devpocketScrollY
+      if (typeof scrollY === 'number' && Number.isFinite(scrollY)) {
+        cancelAnimationFrame(firstFrame)
+        cancelAnimationFrame(secondFrame)
+        firstFrame = requestAnimationFrame(() => {
+          secondFrame = requestAnimationFrame(() => window.scrollTo(0, scrollY))
+        })
+      }
     }
     window.addEventListener('popstate', syncRoute)
-    return () => window.removeEventListener('popstate', syncRoute)
+    return () => {
+      window.removeEventListener('popstate', syncRoute)
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
+      window.history.scrollRestoration = previousScrollRestoration
+    }
   }, [])
   useEffect(() => {
     if (loading || !pendingNoteId) return
@@ -344,8 +367,8 @@ function App() {
     url.pathname = folderRoutePath(folders, folderId)
     url.searchParams.delete('item')
     if (url.pathname !== window.location.pathname || url.search !== window.location.search) {
-      const state = window.history.state && typeof window.history.state === 'object' ? window.history.state : {}
-      window.history.pushState({ ...state, devpocketNavigation: true }, '', url)
+      pushHistoryEntry(url, { devpocketNavigation: true }, 0)
+      window.scrollTo(0, 0)
     }
     setPendingNoteId(null)
     setEditor(null)
@@ -355,8 +378,7 @@ function App() {
     const url = new URL(window.location.href)
     url.searchParams.set('item', note.id)
     if (url.search !== window.location.search) {
-      const state = window.history.state && typeof window.history.state === 'object' ? window.history.state : {}
-      window.history.pushState({ ...state, devpocketModalNoteId: note.id }, '', url)
+      pushHistoryEntry(url, { devpocketModalNoteId: note.id })
     }
     setPendingNoteId(note.id)
     setEditor({ mode: 'detail', note })
