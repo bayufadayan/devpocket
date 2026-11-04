@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { api } from './api'
 import { MarkdownContent } from './components/MarkdownContent'
 import { BuiltinIcon } from './components/BuiltinIcon'
@@ -148,6 +148,8 @@ function App() {
   const [folderIconName, setFolderIconName] = useState('')
   const [folderIconAssetId, setFolderIconAssetId] = useState('')
   const [folderIconUrl, setFolderIconUrl] = useState('')
+  const [noteMoveMenu, setNoteMoveMenu] = useState<{ note: Note; x: number; y: number } | null>(null)
+  const [movingNoteId, setMovingNoteId] = useState<string | null>(null)
   const [folderMenuId, setFolderMenuId] = useState<string | null>(null)
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null)
   const [folderNameDraft, setFolderNameDraft] = useState('')
@@ -249,6 +251,19 @@ function App() {
     }
   }, [folders, loading, openFolder])
   useEffect(() => { setFolderMenuId(null) }, [openFolder, view])
+  useEffect(() => {
+    if (!noteMoveMenu) return
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !document.querySelector('.note-move-menu')?.contains(event.target)) setNoteMoveMenu(null)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNoteMoveMenu(null) }
+    window.addEventListener('pointerdown', dismiss)
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('pointerdown', dismiss)
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [noteMoveMenu])
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(''), 2200); return () => clearTimeout(id) }, [toast])
   useEffect(() => {
     const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); document.querySelector<HTMLInputElement>('#global-search')?.focus() } }
@@ -288,6 +303,7 @@ function App() {
     return result
   }, [folders])
   const draftFolderIds = useMemo(() => new Set(folders.filter((folder) => folderSubtrees.get(folder.id)?.has(DRAFT_FOLDER_ID)).map((folder) => folder.id)), [folders, folderSubtrees])
+  const moveFolderOptions = useMemo(() => [...folders].sort((a, b) => Number(!draftFolderIds.has(a.id)) - Number(!draftFolderIds.has(b.id)) || (folderPaths.get(a.id) ?? a.name).localeCompare(folderPaths.get(b.id) ?? b.name, 'id')), [folders, draftFolderIds, folderPaths])
   const draftFolderId = folders.find((folder) => folder.is_system)?.id ?? DRAFT_FOLDER_ID
   const folderItemCounts = useMemo(() => {
     const byId = new Map(folders.map((folder) => [folder.id, folder]))
@@ -525,6 +541,30 @@ function App() {
     try { await api.deleteNote(note.id); closeNoteModal(); setToast('Dihapus'); await refresh() }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal menghapus catatan.') }
   }
+  function showNoteMoveMenu(note: Note, event: ReactMouseEvent<HTMLElement>) {
+    event.preventDefault()
+    const menuHeight = Math.min(window.innerHeight * 0.72, 440)
+    setFolderMenuId(null)
+    setNoteMoveMenu({
+      note,
+      x: Math.max(12, Math.min(event.clientX, window.innerWidth - 292)),
+      y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
+    })
+  }
+  async function moveNoteToFolder(note: Note, folder: Folder) {
+    if (note.folder_id === folder.id || movingNoteId) return
+    const usage: NoteUsage | '' = draftFolderIds.has(folder.id) ? '' : note.status === 'collection' ? note.usage ?? 'try' : 'try'
+    setMovingNoteId(note.id)
+    setError('')
+    try {
+      const updated = await api.updateNote(note.id, { folderId: folder.id, usage })
+      setNotes((current) => current.map((item) => item.id === updated.id ? updated : item))
+      setNoteMoveMenu(null)
+      setToast(`Dipindahkan ke ${folderPaths.get(folder.id) ?? folder.name}`)
+      await refresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Gagal memindahkan item.') }
+    finally { setMovingNoteId(null) }
+  }
   async function dropOn(event: DragEvent<HTMLElement>, destination: CollectionTab) {
     event.preventDefault()
     const id = dragId || event.dataTransfer.getData('text/plain')
@@ -545,7 +585,7 @@ function App() {
   }
 
   function NoteCard({ note, showFolder = false }: { note: Note; showFolder?: boolean }) {
-    return <article className="note-card">
+    return <article className="note-card" onContextMenu={(event) => showNoteMoveMenu(note, event)}>
       <button className="note-card-main" onClick={() => openNoteModal(note)}>
         <span className="note-meta"><i className={`platform-dot dot-${note.platform.toLowerCase().replace(/[^a-z]/g, '')}`} />{note.platform}<span>·</span>{formatDate(note.created_at)}</span>
         <span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={30} />}<strong>{note.title}</strong></span>
@@ -566,7 +606,7 @@ function App() {
   }
 
   function CompareCard({ note }: { note: Note }) {
-    return <article className="compare-card" draggable onDragStart={(event) => { setDragId(note.id); event.dataTransfer.setData('text/plain', note.id) }} onDragEnd={() => setDragId(null)}>
+    return <article className="compare-card" draggable onContextMenu={(event) => showNoteMoveMenu(note, event)} onDragStart={(event) => { setDragId(note.id); event.dataTransfer.setData('text/plain', note.id) }} onDragEnd={() => setDragId(null)}>
       <button className="compare-main" onClick={() => openNoteModal(note)}><span className="note-meta">{note.platform} · {formatDate(note.created_at)}</span><span className="note-heading">{(note.icon_name || note.icon_asset_id || note.icon_url) && <NoteIcon iconName={note.icon_name} iconAssetId={note.icon_asset_id} iconUrl={note.icon_url} size={28} />}<strong>{note.title}</strong></span><span className="note-folder"><Icon name="folder" size={14} />{note.folder_id ? folderPaths.get(note.folder_id) ?? note.folder_name : note.folder_name}</span></button>
       <div className="compare-card-actions"><button className={`pin-button${note.is_pinned ? ' is-pinned' : ''}`} onClick={() => void toggleNotePinned(note)} aria-label={note.is_pinned ? 'Lepas sematan item' : 'Sematkan item'} title={note.is_pinned ? 'Lepas sematan' : 'Sematkan'}><Icon name="star" size={17} filled={Boolean(note.is_pinned)} /></button><span className="drag-mark" aria-hidden="true">⠿</span></div>
     </article>
@@ -622,6 +662,7 @@ function App() {
     </form></Modal>}
 
     {editor?.mode === 'detail' && <Modal title={editor.note.title} icon={(editor.note.icon_name || editor.note.icon_asset_id || editor.note.icon_url) ? <NoteIcon iconName={editor.note.icon_name} iconAssetId={editor.note.icon_asset_id} iconUrl={editor.note.icon_url} size={34} /> : null} onClose={closeNoteModal} wide><article className="detail-body"><div className="detail-meta">{editor.note.platform} · Ditambahkan {new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date(editor.note.created_at))} · {editor.note.folder_id ? folderPaths.get(editor.note.folder_id) ?? editor.note.folder_name : editor.note.folder_name}{editor.note.usage && <> · {usageLabels[editor.note.usage]}</>}</div>{error && <p className="modal-error" role="alert">{error}</p>}<MarkdownContent content={editor.note.content} />{editor.note.source_url && <a className="source-link" href={editor.note.source_url} target="_blank" rel="noreferrer">Buka sumber <Icon name="external" size={15} /></a>}<footer className="detail-actions"><button className="button danger" onClick={() => void removeNote(editor.note)}><Icon name="trash" />Hapus</button><div className="detail-actions-right"><button className="button" onClick={() => void toggleNotePinned(editor.note)}><Icon name="star" filled={Boolean(editor.note.is_pinned)} />{editor.note.is_pinned ? 'Lepas sematan' : 'Sematkan'}</button><button className="button primary" onClick={() => editNote(editor.note)}><Icon name="edit" />Edit</button></div></footer></article></Modal>}
+    {noteMoveMenu && <div className="note-move-menu" style={{ left: noteMoveMenu.x, top: noteMoveMenu.y }} onContextMenu={(event) => event.preventDefault()}><span className="note-move-menu-label">Pindahkan ke folder</span><strong className="note-move-menu-title" title={noteMoveMenu.note.title}>{noteMoveMenu.note.title}</strong><div className="note-move-options">{moveFolderOptions.map((folder) => <button key={folder.id} type="button" disabled={Boolean(movingNoteId) || noteMoveMenu.note.folder_id === folder.id} aria-current={noteMoveMenu.note.folder_id === folder.id ? 'true' : undefined} title={folderPaths.get(folder.id) ?? folder.name} onClick={() => void moveNoteToFolder(noteMoveMenu.note, folder)}>{folderPaths.get(folder.id) ?? folder.name}{noteMoveMenu.note.folder_id === folder.id && <small>Sekarang</small>}</button>)}</div></div>}
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>
 }

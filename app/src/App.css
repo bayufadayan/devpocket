@@ -81,6 +81,14 @@
 .folder-menu button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); text-align: left; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
 .folder-menu button:hover { background: #efeee9; }
 .folder-menu button.folder-menu-delete { color: #8e2d2d; }
+.note-move-menu { position: fixed; z-index: 40; width: min(280px, calc(100vw - 24px)); max-height: min(70vh, 440px); display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 5px 6px 18px #bdbab280, -3px -3px 10px #ffffffc0; }
+.note-move-menu-label { padding: 2px 8px 0; color: var(--muted); font-size: 11px; }
+.note-move-menu-title { overflow: hidden; padding: 0 8px 5px; color: var(--text); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.note-move-options { min-height: 0; display: grid; gap: 2px; overflow-y: auto; }
+.note-move-options button { width: 100%; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; overflow: hidden; border: 0; border-radius: 7px; background: transparent; color: var(--text); text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.note-move-options button:hover:not(:disabled) { background: #e7ebfa; color: var(--accent); }
+.note-move-options button:disabled { color: var(--muted); cursor: default; }
+.note-move-options button small { flex: none; color: var(--muted); font-size: 10px; }
 .folder-add { position: absolute; right: 10px; bottom: 10px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--accent); box-shadow: var(--shadow-up); cursor: pointer; }
 .folder-add:hover { background: #e7ebfa; }
 .items-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-content: start; }
